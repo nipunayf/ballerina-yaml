@@ -12,7 +12,9 @@ enum RegexPattern {
     OCTAL_DIGIT_PATTERN = "0-7",
     BINARY_DIGIT_PATTERN = "0-1",
     LINE_BREAK_PATTERN = "\\x0a\\x0d",
-    WORD_PATTERN = "a-zA-Z0-9\\-"
+    WORD_PATTERN = "a-zA-Z0-9\\-",
+    FLOW_INDICATOR_PATTERN = "\\,\\[\\]\\{\\}",
+    WHITESPACE_PATTERN = "\\s\\t"
 }
 
 # Represents the state of the Lexer.
@@ -64,10 +66,12 @@ class Lexer {
 
         match self.line[self.index] {
             "&" => {
-                return self.generateToken(ANCHOR);
+                self.index += 1;
+                return self.iterate(self.anchorName, ANCHOR);
             }
             "*" => {
-                return self.generateToken(ALIAS);
+                self.index += 1;
+                return self.iterate(self.anchorName, ALIAS);
             }
             "-" => {
                 return self.generateToken(SEQUENCE_ENTRY);
@@ -118,6 +122,14 @@ class Lexer {
         }
 
         return self.generateError("Invalid character", self.index);
+    }
+
+    private function anchorName(int i) returns boolean|LexicalError {
+        if(self.matchRegexPattern([PRINTABLE_PATTERN], i, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
+            self.lexeme += self.line[i];
+            return false;
+        }
+        return true;
     }
 
     # Encapsulate a function to run isolatedly on the remaining characters.

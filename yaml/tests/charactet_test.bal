@@ -22,6 +22,18 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
     };
 } 
 
+@test:Config {}
+function testAnchorToken() returns error? {
+    Lexer lexer = setLexerString("&anchor value");
+    check assertToken(lexer, ANCHOR, lexeme = "anchor");
+}
+
+@test:Config {}
+function testAliasToken() returns error? {
+    Lexer lexer = setLexerString("*anchor");
+    check assertToken(lexer, ALIAS, lexeme = "anchor");
+}
+
 // @test:Config {}
 // function testSingleQuotedFlowScalar() returns error? {
 //     Lexer lexer = setLexerString("'somevalue'");
@@ -32,4 +44,4 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
 // function testSingleQuotedScalar() returns error? {
 //     Lexer lexer = setLexerString("\"somevalue\"");
 //     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-// }
+    // }
