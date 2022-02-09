@@ -4,15 +4,15 @@ import ballerina/regex;
 type LexicalError distinct error;
 
 enum RegexPattern {
-    PRINTABLE_PATTERN = "[\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\xd7ff\\xe000-\\xfffd]{1}",
-    JSON_PATTERN = "[\\x09\\x20-\\xffff]{1}",
-    BOM_PATTERN = "[\\xfeff]{1}",
-    DECIMAL_DIGIT_PATTERN = "[0-9]{1}",
-    HEXADECIMAL_DIGIT_PATTERN = "[0-9a-fA-F]{1}",
-    OCTAL_DIGIT_PATTERN = "[0-7]{1}",
-    BINARY_DIGIT_PATTERN = "[0-1]{1}",
-    LINE_BREAK_PATTERN = "[\\x0a\\x0d]{1}",
-    WORD_PATTERN = "[a-zA-Z0-9\\-]{1}"
+    PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\xd7ff\\xe000-\\xfffd",
+    JSON_PATTERN = "\\x09\\x20-\\xffff",
+    BOM_PATTERN = "\\xfeff",
+    DECIMAL_DIGIT_PATTERN = "0-9",
+    HEXADECIMAL_DIGIT_PATTERN = "0-9a-fA-F",
+    OCTAL_DIGIT_PATTERN = "0-7",
+    BINARY_DIGIT_PATTERN = "0-1",
+    LINE_BREAK_PATTERN = "\\x0a\\x0d",
+    WORD_PATTERN = "a-zA-Z0-9\\-"
 }
 
 # Represents the state of the Lexer.
@@ -152,13 +152,35 @@ class Lexer {
         return self.index + k < self.line.length() ? self.line[self.index + k] : ();
     }
 
-    # Check if the given character matches the regex pattern
+    # Check if the given character matches the regex pattern.
     #
-    # + pattern - Regex pattern
-    # + index - Index of the character. Default = self.index
+    # + inclusionPatterns - Included the regex patterns
+    # + index - Index of the character. Default = self.index  
+    # + exclusionPatterns - Exclude the regex pattenrs
     # + return - True if the pattern mathces
-    private function matchRegexPattern(string pattern, int? index = ()) returns boolean {
-        return regex:matches(self.line[index == () ? self.index : index], pattern);
+    private function matchRegexPattern(string|string[] inclusionPatterns, int? index = (), string|string[]? exclusionPatterns = ()) returns boolean {
+        string inclusionPattern = "[" + self.concatenateStringArray(inclusionPatterns) + "]";
+        string exclusionPattern = "";
+
+        if (exclusionPatterns != ()) {
+            exclusionPattern = "(?![" + self.concatenateStringArray(exclusionPatterns) + "])";
+        }
+        return regex:matches(self.line[index == () ? self.index : index], exclusionPattern + inclusionPattern + "{1}");
+    }
+
+    # Concatenate one or more strings.
+    #
+    # + strings - Strings to be concatenated
+    # + return - Concatenated string
+    function concatenateStringArray(string[]|string strings) returns string {
+        if (strings is string) {
+            return strings;
+        }
+        string output = "";
+        strings.forEach(function(string line) {
+            output += line;
+        });
+        return output;
     }
 
     # Check if the tokens adhere to the given string.
