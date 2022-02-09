@@ -10,7 +10,9 @@ enum RegexPattern {
     DECIMAL_DIGIT_PATTERN = "[0-9]{1}",
     HEXADECIMAL_DIGIT_PATTERN = "[0-9a-fA-F]{1}",
     OCTAL_DIGIT_PATTERN = "[0-7]{1}",
-    BINARY_DIGIT_PATTERN = "[0-1]{1}"
+    BINARY_DIGIT_PATTERN = "[0-1]{1}",
+    LINE_BREAK_PATTERN = "[\\x0a\\x0d]{1}",
+    WORD_PATTERN = "[a-zA-Z0-9\\-]{1}"
 }
 
 # Represents the state of the Lexer.
@@ -97,9 +99,48 @@ class Lexer {
             "," => {
                 return self.generateToken(SEPARATOR);
             }
+            "[" => {
+                return self.generateToken(SEQUENCE_START);
+            }
+            "]" => {
+                return self.generateToken(SEQUENCE_END);
+            }
+            "{" => {
+                return self.generateToken(MAPPING_START);
+            }
+            "}" => {
+                return self.generateToken(MAPPING_END);
+            }
+            "'" => {
+
+            }
+
         }
 
         return self.generateError("Invalid character", self.index);
+    }
+
+    # Encapsulate a function to run isolatedly on the remaining characters.
+    # Function lookaheads to capture the lexems for a targetted token.
+    #
+    # + process - Function to be executed on each iteration  
+    # + successToken - Token to be returned on successful traverse of the characters
+    # + message - Message to display if the end delimeter is not shown
+    # + return - Lexical Error if available
+    private function iterate(function (int) returns boolean|LexicalError process,
+                            YAMLToken successToken,
+                            string message = "") returns Token|LexicalError {
+
+        // Iterate the given line to check the DFA
+        foreach int i in self.index ... self.line.length() - 1 {
+            if (check process(i)) {
+                return self.generateToken(successToken);
+            }
+        }
+        self.index = self.line.length() - 1;
+
+        // If the lexer does not expect an end delimiter at EOL, returns the token. Else it an error.
+        return message.length() == 0 ? self.generateToken(successToken) : self.generateError(message, self.index);
     }
 
     # Peeks the character succeeding after k indexes. 
