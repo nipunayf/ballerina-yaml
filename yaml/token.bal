@@ -23,11 +23,18 @@ enum YAMLToken {
     VALUE_TOKEN,
     BLOCK_ENTRY,
     FLOW_ENTRY,
-    ALIAS,
-    ANCHOR,
-    TAG,
-    SCALAR,
+    DIRECTIVE = "%",
+    ALIAS = "*",
+    ANCHOR = "&",
+    TAG_HANDLE = "!",
+    TAG_PREFIX = "<tag-prefix>",
+    DOT = ".",
+    SCALAR = "<scalar>",
     LITERAL,
     FOLDED,
-    EOL
+    DECIMAL = "<decimal-integer>",
+    SEPARATION_IN_LINE = "<separation-in-line>",
+    LINE_BREAK = "<break>",
+    EOL,
+    DUMMY
 }

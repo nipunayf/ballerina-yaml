@@ -20,7 +20,29 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
         "mapping-start": ["{", MAPPING_START],
         "mapping-end": ["}", MAPPING_END]
     };
-} 
+}
+
+@test:Config {}
+function testAnchorToken() returns error? {
+    Lexer lexer = setLexerString("&anchor value");
+    check assertToken(lexer, ANCHOR, lexeme = "anchor");
+}
+
+@test:Config {}
+function testAliasToken() returns error? {
+    Lexer lexer = setLexerString("*anchor");
+    check assertToken(lexer, ALIAS, lexeme = "anchor");
+}
+
+@test:Config {}
+function testSeparationSpacesToken() returns error? {
+    Lexer lexer = setLexerString(" ");
+    check assertToken(lexer, SEPARATION_IN_LINE);
+
+    lexer = setLexerString("  1");
+    check assertToken(lexer, SEPARATION_IN_LINE);
+    check assertToken(lexer, DECIMAL, lexeme = "1");
+}
 
 // @test:Config {}
 // function testSingleQuotedFlowScalar() returns error? {

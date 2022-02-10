@@ -1,13 +1,13 @@
 import ballerina/test;
 
-const ORIGIN_FILE_PATH = "toml/tests/resources/";
+const ORIGIN_FILE_PATH = "yaml/tests/resources/";
 
 # Returns a new lexer with the configured line for testing
 #
 # + line - Testing TOML string  
 # + lexerState - The state for the lexer to be initialized with
 # + return - Configured lexer
-function setLexerString(string line, State lexerState = START) returns Lexer {
+function setLexerString(string line, State lexerState = LEXER_START) returns Lexer {
     Lexer lexer = new Lexer();
     lexer.line = line;
     lexer.state = lexerState;
@@ -34,9 +34,10 @@ function assertToken(Lexer lexer, YAMLToken assertingToken, int index = 0, strin
 # Assert if a lexical error is generated during the tokenization
 #
 # + tomlString - String to generate a Lexer token  
-# + index - Index of the targetted token (defualt = 0)
-function assertLexicalError(string tomlString, int index = 0) {
-    Lexer lexer = setLexerString(tomlString);
+# + index - Index of the targetted token (defualt = 0)  
+# + state - State of the lexer
+function assertLexicalError(string tomlString, int index = 0, State state = LEXER_START) {
+    Lexer lexer = setLexerString(tomlString, state);
     Token|error token = getToken(lexer, index);
     test:assertTrue(token is LexicalError);
 }
