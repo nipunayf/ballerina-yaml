@@ -1,8 +1,5 @@
 import ballerina/regex;
 
-# Represenst an error caused by the lexical analyzer
-type LexicalError distinct error;
-
 enum RegexPattern {
     PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\xd7ff\\xe000-\\xfffd",
     JSON_PATTERN = "\\x09\\x20-\\xffff",
@@ -36,12 +33,17 @@ class Lexer {
     string lexeme = "";
 
     # Current state of the Lexer
-    State state = KEY;
+    State state = START;
 
     # Generates a Token for the next immediate lexeme.
     #
     # + return - If success, returns a token, else returns a Lexical Error 
-    function getToken() returns Token|error {
+    function getToken() returns Token|LexicalError {
+
+        // Generate EOL token at the last index
+        if (self.index >= self.line.length()) {
+            return {token: EOL};
+        }
 
         // Ignore comments from processing
         if (self.line[self.index] == "#") {
@@ -59,15 +61,22 @@ class Lexer {
 
     }
 
-    private function stateStart() returns Token|error {
+    private function stateStart() returns Token|LexicalError {
         if (self.matchRegexPattern(BOM_PATTERN)) {
             return self.generateToken(BOM);
+        }
+
+        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
+            return self.iterate(self.digit(DECIMAL_DIGIT_PATTERN), DECIMAL);
         }
 
         match self.line[self.index] {
             "&" => {
                 self.index += 1;
                 return self.iterate(self.anchorName, ANCHOR);
+            }
+            " " => {
+                return self.iterate(self.whitespace, SEPARATION_IN_LINE);
             }
             "*" => {
                 self.index += 1;
@@ -130,6 +139,9 @@ class Lexer {
             "'" => {
 
             }
+            "." => {
+                return self.generateToken(DOT);
+            }
 
         }
 
@@ -144,20 +156,43 @@ class Lexer {
         return true;
     }
 
+    private function whitespace(int i) returns boolean {
+        if (self.line[i] == " ") {
+            return false;
+        }
+        return true;
+    }
+    # Check for the lexems to crete an DECIMAL token.
+    #
+    # + digitPattern - Regex pattern of the number system
+    # + return - Generates a function which checks the lexems for the given number system.  
+    private function digit(string digitPattern) returns function (int i) returns boolean|LexicalError {
+        return function(int i) returns boolean|LexicalError {
+            if (self.matchRegexPattern(digitPattern, i)) {
+                self.lexeme += self.line[i];
+                return false;
+            }
+            return true;
+        };
+    }
+
     # Encapsulate a function to run isolatedly on the remaining characters.
     # Function lookaheads to capture the lexems for a targetted token.
     #
     # + process - Function to be executed on each iteration  
-    # + successToken - Token to be returned on successful traverse of the characters
-    # + message - Message to display if the end delimeter is not shown
+    # + successToken - Token to be returned on successful traverse of the characters  
+    # + message - Message to display if the end delimeter is not shown  
+    # + include - True when the last char belongs to the token
     # + return - Lexical Error if available
     private function iterate(function (int) returns boolean|LexicalError process,
                             YAMLToken successToken,
+                            boolean include = false,
                             string message = "") returns Token|LexicalError {
 
         // Iterate the given line to check the DFA
         foreach int i in self.index ... self.line.length() - 1 {
             if (check process(i)) {
+                self.index = include ? i : i - 1;
                 return self.generateToken(successToken);
             }
         }

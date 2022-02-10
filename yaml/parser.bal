@@ -1,6 +1,3 @@
-# Represents an error caused by parser
-type ParsingError distinct error;
-
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -17,19 +14,64 @@ class Parser {
     # Lexical analyzer tool for getting the tokens
     private Lexer lexer = new Lexer();
 
+    # YAML version of the document.
+    string? yamlVersion = ();
+
     function init(string[] lines) {
         self.lines = lines;
         self.numLines = lines.length();
+    }
+
+    # Parse the initialized array of strings
+    #
+    # + return - Lexical or parsing error on failure
+    public function parse() returns (LexicalError|ParsingError)? {
+
+        // Iterating each line of the document.
+        while self.lineIndex < self.numLines - 1 {
+            check self.initLexer("Cannot open the YAML document");
+            check self.checkToken();
+
+            match self.currentToken.token {
+                DIRECTIVE => {
+                    if (self.currentToken.value == "YAML") {
+                        check self.yamlDirective();
+                    }
+                }
+
+            }
+        }
+    }
+
+    private function yamlDirective() returns (LexicalError|ParsingError)? {
+        // Expect a separate in line.
+        check self.checkToken(SEPARATION_IN_LINE);
+
+        // Expect yaml version
+        check self.checkToken(DECIMAL, true);
+        check self.checkToken(DOT);
+        self.lexemeBuffer += ".";
+        check self.checkToken(DECIMAL, true);
+
+        // Update the version
+        if (self.yamlVersion is null) {
+            self.yamlVersion = self.lexemeBuffer;
+            self.lexemeBuffer = "";
+            return;
+        }
+
+        return self.generateError(check self.formatErrorMessage(2, value = "%YAML"));
     }
 
     # Assert the next lexer token with the predicted token.
     # If no token is provided, then the next token is retrieved without an error checking.
     # Hence, the error checking must be done explicitly.
     #
-    # + expectedTokens - Predicted token or tokens
+    # + expectedTokens - Predicted token or tokens  
     # + customMessage - Error message to be displayed if the expected token not found  
+    # + addToLexeme - If set, add the value of the token to lexemeBuffer.
     # + return - Parsing error if not found
-    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, string customMessage = "") returns error? {
+    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "") returns (LexicalError|ParsingError)? {
         YAMLToken prevToken = self.currentToken.token;
         self.currentToken = check self.lexer.getToken();
 
@@ -53,6 +95,10 @@ class Parser {
                 return self.generateError(errorMessage);
             }
         }
+
+        if (addToLexeme) {
+            self.lexemeBuffer += self.currentToken.value;
+        }
     }
 
     # Initialize the lexer with the attributes of a new line.
@@ -60,7 +106,7 @@ class Parser {
     # + message - Error messgae to display when if the initalization fails 
     # + incrementLine - Sets the next line to the lexer
     # + return - An error if it fails to initialize  
-    private function initLexer(string message, boolean incrementLine = true) returns error? {
+    private function initLexer(string message, boolean incrementLine = true) returns ParsingError? {
         if (incrementLine) {
             self.lineIndex += 1;
         }
@@ -102,7 +148,7 @@ class Parser {
             int messageType,
             YAMLToken|YAMLToken[] expectedTokens = DUMMY,
             YAMLToken beforeToken = DUMMY,
-            string value = "") returns string|error {
+            string value = "") returns string|ParsingError {
 
         match messageType {
             1 => { // Expected ${expectedTokens} after ${beforeToken}, but found ${actualToken}

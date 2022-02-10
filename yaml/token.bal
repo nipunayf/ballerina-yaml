@@ -27,9 +27,12 @@ enum YAMLToken {
     ALIAS = "*",
     ANCHOR = "&",
     TAG = "!",
+    DOT = ".",
     SCALAR = "<scalar>",
     LITERAL,
     FOLDED,
+    DECIMAL = "<decimal-integer>",
+    SEPARATION_IN_LINE = "<separation-in-line>",
     EOL,
     DUMMY
 }

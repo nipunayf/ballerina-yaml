@@ -34,6 +34,16 @@ function testAliasToken() returns error? {
     check assertToken(lexer, ALIAS, lexeme = "anchor");
 }
 
+@test:Config {}
+function testSeparationSpacesToken() returns error? {
+    Lexer lexer = setLexerString(" ");
+    check assertToken(lexer, SEPARATION_IN_LINE);
+
+    lexer = setLexerString("  1");
+    check assertToken(lexer, SEPARATION_IN_LINE);
+    check assertToken(lexer, DECIMAL, lexeme = "1");
+}
+
 // @test:Config {}
 // function testSingleQuotedFlowScalar() returns error? {
 //     Lexer lexer = setLexerString("'somevalue'");
