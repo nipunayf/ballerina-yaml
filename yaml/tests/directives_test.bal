@@ -49,9 +49,9 @@ function testInvalidYAMLDirectives(string yam) {
 
 function invalidDirectiveDataGen() returns map<[string]> {
     return {
-        "additional dot" : ["%YAML 1.2.1"],
+        "additional dot": ["%YAML 1.2.1"],
         "no space": ["%YAML1.2"],
-        "single digit" : ["%YAML 1"]
+        "single digit": ["%YAML 1"]
     };
 }
 
@@ -68,5 +68,36 @@ function validTagDataGen() returns map<[string, string]> {
         "primary": ["! ", "!"],
         "secondary": ["!! ", "!!"],
         "named": ["!named! ", "!named!"]
+    };
+}
+
+@test:Config {
+    dataProvider: tagPrefixDataGen
+}
+function testTagPrefixTokens(string lexeme, string value) returns error? {
+    Lexer lexer = setLexerString(lexeme, LEXER_TAG_PREFIX);
+    check assertToken(lexer, TAG_PREFIX, lexeme = value);
+}
+
+function tagPrefixDataGen() returns map<[string, string]> {
+    return {
+        "local tag prefix": ["!local- ", "!local-"],
+        "global tag prefix": ["tag:example.com,2000:app/  ", "tag:example.com,2000:app/"],
+        "global tag prefix with hex": ["%abglobal  ", "%abglobal"]
+    };
+}
+
+@test:Config {
+    dataProvider: invalidUriHexDataGen
+}
+function testInvalidURIHexCharacters(string lexeme) returns error? {
+    assertLexicalError(lexeme, state = LEXER_TAG_PREFIX);
+}
+
+function invalidUriHexDataGen() returns map<[string]> {
+    return {
+        "one digit": ["%a"],
+        "no digit": ["%"],
+        "two %": ["%1%"]
     };
 }

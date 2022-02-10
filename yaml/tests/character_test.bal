@@ -20,7 +20,7 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
         "mapping-start": ["{", MAPPING_START],
         "mapping-end": ["}", MAPPING_END]
     };
-} 
+}
 
 @test:Config {}
 function testAnchorToken() returns error? {
@@ -54,4 +54,4 @@ function testSeparationSpacesToken() returns error? {
 // function testSingleQuotedScalar() returns error? {
 //     Lexer lexer = setLexerString("\"somevalue\"");
 //     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-    // }
+// }

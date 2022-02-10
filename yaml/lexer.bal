@@ -11,13 +11,14 @@ enum RegexPattern {
     LINE_BREAK_PATTERN = "\\x0a\\x0d",
     WORD_PATTERN = "a-zA-Z0-9\\-",
     FLOW_INDICATOR_PATTERN = "\\,\\[\\]\\{\\}",
-    WHITESPACE_PATTERN = "\\s\\t"
+    WHITESPACE_PATTERN = "\\s\\t",
+    URI_CHAR_PATTERN = "#;/\\?:@&=\\+\\$,_\\.!~\\*'\\(\\)\\[\\]"
 }
 
 # Represents the state of the Lexer.
 enum State {
-    START,
-    KEY
+    LEXER_START,
+    LEXER_TAG_PREFIX
 }
 
 # Generates tokens based on the YAML lexemes  
@@ -33,7 +34,10 @@ class Lexer {
     string lexeme = "";
 
     # Current state of the Lexer
-    State state = START;
+    State state = LEXER_START;
+
+    # Incremented when the lexer needs to be aware of the char count.
+    private int charCounter = 0;
 
     # Generates a Token for the next immediate lexeme.
     #
@@ -51,14 +55,49 @@ class Lexer {
         }
 
         match self.state {
-            START => {
+            LEXER_START => {
                 return check self.stateStart();
+            }
+            LEXER_TAG_PREFIX => {
+                return check self.stateTagPrefix();
             }
             _ => {
                 return self.generateError("Invalid state", self.index);
             }
         }
 
+    }
+
+    private function stateTagPrefix() returns Token|LexicalError {
+
+        // Match the global prefix with tag pattern or local tag prefix
+        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
+        || self.line[self.index] == "!") {
+            self.lexeme += self.line[self.index];
+            self.index += 1;
+            return self.iterate(self.uriCharacter, TAG_PREFIX);
+        }
+
+        // Match the global prefix with hexa-decimal value
+        if (self.line[self.index] == "%") {
+            self.lexeme += "%";
+
+            // Match the first digit of the tag char
+            if (self.peek(1) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, self.index + 1)) {
+                self.lexeme += self.line[self.index + 1];
+
+                // Match the second digit of the tag char
+                if (self.peek(2) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, self.index + 2)) {
+                    self.lexeme += self.line[self.index + 2];
+                    self.index += 3;
+
+                    // Check for URI characters
+                    return self.iterate(self.uriCharacter, TAG_PREFIX);
+                }
+            }
+        }
+
+        return self.generateError(self.formatErrorMessage(self.index, TAG_PREFIX), self.index);
     }
 
     private function stateStart() returns Token|LexicalError {
@@ -169,6 +208,30 @@ class Lexer {
         }
 
         return self.generateError("Invalid character", self.index);
+    }
+
+    private function uriCharacter(int i) returns boolean|LexicalError {
+        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], i)) {
+            self.lexeme += self.line[i];
+            return false;
+        }
+        if self.line[i] == "%" {
+            if (self.charCounter > 1 && self.charCounter < 4) {
+                return self.generateError("Must have 2 digits for a hexadecimal in URI", i);
+            }
+            self.lexeme += "%";
+            self.charCounter += 1;
+            return false;
+        }
+        if (self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, i) && self.charCounter > 1 && self.charCounter < 4) {
+            self.lexeme += self.line[i];
+            self.charCounter += 1;
+            return false;
+        }
+        if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN], i) {
+            return false;
+        }
+        return self.generateError(self.formatErrorMessage(i, TAG_PREFIX), i);
     }
 
     private function tagHandle(int i) returns boolean|LexicalError {
