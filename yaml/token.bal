@@ -26,7 +26,7 @@ enum YAMLToken {
     DIRECTIVE = "%",
     ALIAS = "*",
     ANCHOR = "&",
-    TAG = "!",
+    TAG_HANDLE = "!",
     DOT = ".",
     SCALAR = "<scalar>",
     LITERAL,

@@ -54,3 +54,19 @@ function invalidDirectiveDataGen() returns map<[string]> {
         "single digit" : ["%YAML 1"]
     };
 }
+
+@test:Config {
+    dataProvider: validTagDataGen
+}
+function testValidTagHandlers(string tag, string lexeme) returns error? {
+    Lexer lexer = setLexerString(tag);
+    check assertToken(lexer, TAG_HANDLE, lexeme = lexeme);
+}
+
+function validTagDataGen() returns map<[string, string]> {
+    return {
+        "primary": ["! ", "!"],
+        "secondary": ["!! ", "!!"],
+        "named": ["!named! ", "!named!"]
+    };
+}

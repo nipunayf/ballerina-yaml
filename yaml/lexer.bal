@@ -90,7 +90,26 @@ class Lexer {
                 return self.generateToken(SEQUENCE_ENTRY);
             }
             "!" => {
-                return self.generateToken(TAG);
+                match self.peek(1) {
+                    " "|"\t" => { // Primary tag handle
+                        self.lexeme = "!";
+                        self.index += 1;
+                        return self.generateToken(TAG_HANDLE);
+                    }
+                    "!" => { // Secondary tag handle
+                        self.lexeme = "!!";
+                        self.index += 1;
+                        return self.generateToken(TAG_HANDLE);
+                    }
+                    () => {
+                        return self.generateError("Expected a '" + SEPARATION_IN_LINE + "' after primary tag handle", self.index + 1);
+                    }
+                    _ => { // Check for named tag handles
+                        self.lexeme = "!";
+                        self.index += 1;
+                        return self.iterate(self.tagHandle, TAG_HANDLE);
+                    }
+                }
             }
             "'" => { //TODO: Single-quoted flow scalar
 
@@ -150,6 +169,18 @@ class Lexer {
         }
 
         return self.generateError("Invalid character", self.index);
+    }
+
+    private function tagHandle(int i) returns boolean|LexicalError {
+        if (self.matchRegexPattern(WORD_PATTERN, i)) {
+            self.lexeme += self.line[i];
+            return false;
+        }
+        if self.line[i] == "!" {
+            self.lexeme += "!";
+            return true;
+        }
+        return self.generateError(self.formatErrorMessage(i, TAG_HANDLE), i);
     }
 
     private function anchorName(int i) returns boolean|LexicalError {
