@@ -36,6 +36,7 @@ class Parser {
                 DIRECTIVE => {
                     if (self.currentToken.value == "YAML") {
                         check self.yamlDirective();
+                        check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
                     }
                 }
 

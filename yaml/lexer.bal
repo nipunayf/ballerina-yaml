@@ -66,6 +66,10 @@ class Lexer {
             return self.generateToken(BOM);
         }
 
+        if (self.matchRegexPattern(LINE_BREAK_PATTERN)) {
+            return self.generateToken(LINE_BREAK);
+        }
+
         if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
             return self.iterate(self.digit(DECIMAL_DIGIT_PATTERN), DECIMAL);
         }

@@ -33,6 +33,7 @@ enum YAMLToken {
     FOLDED,
     DECIMAL = "<decimal-integer>",
     SEPARATION_IN_LINE = "<separation-in-line>",
+    LINE_BREAK = "<break>",
     EOL,
     DUMMY
 }
