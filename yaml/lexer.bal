@@ -86,7 +86,19 @@ class Lexer {
 
             }
             "%" => { // Directive line
-
+                match self.peek(1) {
+                    "T" => {
+                        self.index += 1;
+                        return check self.tokensInSequence("TAG", DIRECTIVE);
+                    }
+                    "Y" => {
+                        self.index += 1;
+                        return check self.tokensInSequence("YAML", DIRECTIVE);
+                    }
+                    _ => {
+                        return self.generateError(self.formatErrorMessage(self.index + 1, DIRECTIVE), self.index + 1);
+                    }
+                }
             }
             "|" => { // Literal block scalar
                 return self.generateToken(LITERAL);
@@ -125,7 +137,7 @@ class Lexer {
     }
 
     private function anchorName(int i) returns boolean|LexicalError {
-        if(self.matchRegexPattern([PRINTABLE_PATTERN], i, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
+        if (self.matchRegexPattern([PRINTABLE_PATTERN], i, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
             self.lexeme += self.line[i];
             return false;
         }
