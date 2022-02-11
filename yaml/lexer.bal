@@ -132,7 +132,6 @@ class Lexer {
                 match self.peek(1) {
                     " "|"\t" => { // Primary tag handle
                         self.lexeme = "!";
-                        self.index += 1;
                         return self.generateToken(TAG_HANDLE);
                     }
                     "!" => { // Secondary tag handle
@@ -146,7 +145,7 @@ class Lexer {
                     _ => { // Check for named tag handles
                         self.lexeme = "!";
                         self.index += 1;
-                        return self.iterate(self.tagHandle, TAG_HANDLE);
+                        return self.iterate(self.tagHandle, TAG_HANDLE, true);
                     }
                 }
             }

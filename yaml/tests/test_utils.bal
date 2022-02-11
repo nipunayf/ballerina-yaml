@@ -60,3 +60,19 @@ function getToken(Lexer lexer, int index) returns Token|error {
 
     return token;
 }
+
+# Assert if an parsing error is generated during the parsing
+#
+# + lines - Lines to be parsed.
+# + isLexical - If set, checks for Lexical errors. Else, checks for Parsing errors.
+function assertParsingError(string|string[] lines, boolean isLexical = false) {
+    Parser parser = new Parser((lines is string) ? [lines] : lines);
+    error? err = parser.parse();
+
+    if (isLexical) {
+        test:assertTrue(err is LexicalError);
+    } else {
+        test:assertTrue(err is ParsingError);
+    }
+
+}

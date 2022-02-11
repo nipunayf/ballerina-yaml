@@ -14,6 +14,8 @@ class Parser {
     # Lexical analyzer tool for getting the tokens
     private Lexer lexer = new Lexer();
 
+    map<string> tagHandles = {};
+
     # YAML version of the document.
     string? yamlVersion = ();
 
@@ -30,18 +32,43 @@ class Parser {
         // Iterating each line of the document.
         while self.lineIndex < self.numLines - 1 {
             check self.initLexer("Cannot open the YAML document");
+            self.lexer.state = LEXER_START;
             check self.checkToken();
 
             match self.currentToken.token {
                 DIRECTIVE => {
-                    if (self.currentToken.value == "YAML") {
+                    if (self.currentToken.value == "YAML") { // YAML directive
                         check self.yamlDirective();
+                        check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
+                    }
+                    else { // TAG directive
+                        check self.tagDirective();
                         check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
                     }
                 }
 
             }
         }
+    }
+
+    private function tagDirective() returns (LexicalError|ParsingError)? {
+        // Expect a separate in line
+        check self.checkToken(SEPARATION_IN_LINE);
+
+        // Expect a tag handle
+        check self.checkToken(TAG_HANDLE);
+        string tagHandle = self.currentToken.value;
+        check self.checkToken(SEPARATION_IN_LINE);
+
+        // Expect a tag prefix
+        self.lexer.state = LEXER_TAG_PREFIX;
+        check self.checkToken(TAG_PREFIX);
+        string tagPrefix = self.currentToken.value;
+
+        if (self.tagHandles.hasKey(tagHandle)) {
+            return self.generateError(check self.formatErrorMessage(2, value = tagHandle));
+        }
+        self.tagHandles[tagHandle] = tagPrefix;
     }
 
     private function yamlDirective() returns (LexicalError|ParsingError)? {
