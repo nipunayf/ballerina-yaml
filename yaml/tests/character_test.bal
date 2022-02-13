@@ -43,15 +43,3 @@ function testSeparationSpacesToken() returns error? {
     check assertToken(lexer, SEPARATION_IN_LINE);
     check assertToken(lexer, DECIMAL, lexeme = "1");
 }
-
-// @test:Config {}
-// function testSingleQuotedFlowScalar() returns error? {
-//     Lexer lexer = setLexerString("'somevalue'");
-//     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-// }
-
-// @test:Config {}
-// function testSingleQuotedScalar() returns error? {
-//     Lexer lexer = setLexerString("\"somevalue\"");
-//     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-// }

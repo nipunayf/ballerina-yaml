@@ -16,9 +16,9 @@ type DocumentStartEvent record {|
 |};
 
 type NodeEvent record {|
-    string anchor;
-    string tag;
-    string implicit;
+    string? anchor = ();
+    string? tag = ();
+    boolean implicit;
     string style;
 |};
 

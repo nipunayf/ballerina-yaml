@@ -5,7 +5,7 @@ import ballerina/test;
     groups: ["directives"]
 }
 function testDirectivesToken(string lexeme, string value) returns error? {
-    Lexer lexer = setLexerString(lexeme);
+    Lexer lexer = setLexerString(lexeme, LEXER_DOCUMENT_OUT);
     check assertToken(lexer, DIRECTIVE, lexeme = value);
 }
 
@@ -20,8 +20,8 @@ function directiveDataGen() returns map<[string, string]> {
     groups: ["directives"]
 }
 function testAccurateYAMLDirective() returns error? {
-    Parser parser = new Parser(["%YAML 1.3"]);
-    check parser.parse();
+    Parser parser = new Parser(["%YAML 1.3", "---"]);
+    _ = check parser.parse();
 
     test:assertEquals(parser.yamlVersion, "1.3");
 }
@@ -53,7 +53,7 @@ function invalidDirectiveDataGen() returns map<[string]> {
     dataProvider: validTagDataGen
 }
 function testValidTagHandlers(string tag, string lexeme) returns error? {
-    Lexer lexer = setLexerString(tag);
+    Lexer lexer = setLexerString(tag, LEXER_DOCUMENT_OUT);
     check assertToken(lexer, TAG_HANDLE, lexeme = lexeme);
 }
 
@@ -105,8 +105,8 @@ function testTagDuplicates() {
     dataProvider: tagHandlesDataGen
 }
 function testTagHandles(string line, string tagHandle, string tagPrefix) returns error? {
-    Parser parser = new Parser([line]);
-    check parser.parse();
+    Parser parser = new Parser([line, "---"]);
+    _ = check parser.parse();
     test:assertEquals(parser.tagHandles[tagHandle], tagPrefix);
 }
 

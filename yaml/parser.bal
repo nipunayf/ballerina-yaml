@@ -27,12 +27,12 @@ class Parser {
     # Parse the initialized array of strings
     #
     # + return - Lexical or parsing error on failure
-    public function parse() returns (LexicalError|ParsingError)? {
+    public function parse() returns Event|LexicalError|ParsingError {
 
         // Iterating each line of the document.
         while self.lineIndex < self.numLines - 1 {
             check self.initLexer("Cannot open the YAML document");
-            self.lexer.state = LEXER_START;
+            self.lexer.state = LEXER_DOCUMENT_OUT;
             check self.checkToken();
 
             match self.currentToken.token {
@@ -46,9 +46,16 @@ class Parser {
                         check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
                     }
                 }
+                DIRECTIVE_MARKER => {
+                    return {
+                        docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
+                        tags: self.tagHandles
+                        };
+                }
 
             }
         }
+        return self.generateError("EOF is reached. Cannot generate any more events");
     }
 
     private function tagDirective() returns (LexicalError|ParsingError)? {

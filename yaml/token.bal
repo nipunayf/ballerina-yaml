@@ -37,6 +37,8 @@ enum YAMLToken {
     LINE_BREAK = "<break>",
     DIRECTIVE_MARKER = "---",
     DOCUMENT_MARKER = "...",
+    DOUBLE_QUOTE_DELIMITER = "\"",
+    DOUBLE_QUOTE_CHAR,
     EOL,
     DUMMY
 }
