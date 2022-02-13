@@ -4,7 +4,7 @@ const ORIGIN_FILE_PATH = "yaml/tests/resources/";
 
 # Returns a new lexer with the configured line for testing
 #
-# + line - Testing TOML string  
+# + line - Testing YAML string  
 # + lexerState - The state for the lexer to be initialized with
 # + return - Configured lexer
 function setLexerString(string line, State lexerState = LEXER_START) returns Lexer {
@@ -17,7 +17,7 @@ function setLexerString(string line, State lexerState = LEXER_START) returns Lex
 # Assert the token at the given index
 #
 # + lexer - Testing lexer  
-# + assertingToken - Expected TOML token  
+# + assertingToken - Expected YAML token  
 # + index - Index of the targetted token (default = 0) 
 # + lexeme - Expected lexeme of the token (optional)
 # + return - Returns an lexical error if unsuccessful
@@ -33,11 +33,11 @@ function assertToken(Lexer lexer, YAMLToken assertingToken, int index = 0, strin
 
 # Assert if a lexical error is generated during the tokenization
 #
-# + tomlString - String to generate a Lexer token  
+# + yamlString - String to generate a Lexer token  
 # + index - Index of the targetted token (defualt = 0)  
 # + state - State of the lexer
-function assertLexicalError(string tomlString, int index = 0, State state = LEXER_START) {
-    Lexer lexer = setLexerString(tomlString, state);
+function assertLexicalError(string yamlString, int index = 0, State state = LEXER_START) {
+    Lexer lexer = setLexerString(yamlString, state);
     Token|error token = getToken(lexer, index);
     test:assertTrue(token is LexicalError);
 }

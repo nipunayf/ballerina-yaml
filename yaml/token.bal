@@ -35,6 +35,8 @@ enum YAMLToken {
     DECIMAL = "<decimal-integer>",
     SEPARATION_IN_LINE = "<separation-in-line>",
     LINE_BREAK = "<break>",
+    DIRECTIVE_MARKER = "---",
+    DOCUMENT_MARKER = "...",
     EOL,
     DUMMY
 }

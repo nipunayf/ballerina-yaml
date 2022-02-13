@@ -18,7 +18,8 @@ enum RegexPattern {
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
-    LEXER_TAG_PREFIX
+    LEXER_TAG_PREFIX,
+    LEXER_DOCUMENT_OUT
 }
 
 # Generates tokens based on the YAML lexemes  
@@ -61,11 +62,27 @@ class Lexer {
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
             }
+            LEXER_DOCUMENT_OUT => {
+                return check self.stateDocumentOut();
+            }
             _ => {
                 return self.generateError("Invalid state", self.index);
             }
         }
 
+    }
+
+    private function stateDocumentOut() returns Token|LexicalError {
+        match self.line[self.index] {
+            "-" => {
+                return self.tokensInSequence("---", DIRECTIVE_MARKER);
+            }
+            "." => {
+                return self.tokensInSequence("...", DOCUMENT_MARKER);
+            }
+        }
+
+        return self.generateError(self.formatErrorMessage(self.index, "document prefix"), self.index);
     }
 
     private function stateTagPrefix() returns Token|LexicalError {
@@ -403,9 +420,9 @@ class Lexer {
     # Generate the template error message "Invalid character '${char}' for a '${token}'"
     #
     # + index - Index of the character
-    # + tokenName - Expected token name
+    # + value - Expected token name or the value
     # + return - Generated error message
-    private function formatErrorMessage(int index, YAMLToken tokenName) returns string {
-        return "Invalid character '" + self.line[index] + "' for a '" + tokenName + "'";
+    private function formatErrorMessage(int index, YAMLToken|string value) returns string {
+        return "Invalid character '" + self.line[index] + "' for a '" + <string>value + "'";
     }
 }
