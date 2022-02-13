@@ -50,7 +50,7 @@ class Parser {
                     return {
                         docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
                         tags: self.tagHandles
-                        };
+                    };
                 }
 
             }
@@ -58,6 +58,10 @@ class Parser {
         return self.generateError("EOF is reached. Cannot generate any more events");
     }
 
+    # Check the grammar productions for TAG directives.
+    # Update the tag handles map.
+    #
+    # + return - An eror on mismatch.
     private function tagDirective() returns (LexicalError|ParsingError)? {
         // Expect a separate in line
         check self.checkToken(SEPARATION_IN_LINE);
@@ -78,6 +82,10 @@ class Parser {
         self.tagHandles[tagHandle] = tagPrefix;
     }
 
+    # Check the grammar productions for YAML directives.
+    # Update the yamlVersion of the document.
+    #
+    # + return - An eror on mismatch.
     private function yamlDirective() returns (LexicalError|ParsingError)? {
         // Expect a separate in line.
         check self.checkToken(SEPARATION_IN_LINE);
