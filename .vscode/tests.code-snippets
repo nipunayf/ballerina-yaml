@@ -25,19 +25,19 @@
 	"Create a test case with data generation function": {
 		"prefix": "testDataGen",
 		"body": [
-		  "@test:Config {",
-		  "    dataProvider: $1DataGen",
-		  "}",
-		  "function test$2($3) returns error? {",
-		  "    $4",
-		  "}",
-		  "",
-		  "function $1DataGen() returns map<[$5]> {",
-		  "    return {",
-		  "        \"$6\": [$7]",
-		  "    };",
-		  "}"
+			"@test:Config {",
+			"    dataProvider: $1DataGen",
+			"}",
+			"function test$2($3) returns error? {",
+			"    $4",
+			"}",
+			"",
+			"function $1DataGen() returns map<[$5]> {",
+			"    return {",
+			"        \"$6\": [$7]",
+			"    };",
+			"}"
 		],
 		"description": "Create a test case with data generation function"
-	  }
+	}
 }

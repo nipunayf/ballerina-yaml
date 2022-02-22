@@ -61,7 +61,7 @@ class Parser {
     # Check the grammar productions for TAG directives.
     # Update the tag handles map.
     #
-    # + return - An eror on mismatch.
+    # + return - An error on mismatch.
     private function tagDirective() returns (LexicalError|ParsingError)? {
         // Expect a separate in line
         check self.checkToken(SEPARATION_IN_LINE);
@@ -85,7 +85,7 @@ class Parser {
     # Check the grammar productions for YAML directives.
     # Update the yamlVersion of the document.
     #
-    # + return - An eror on mismatch.
+    # + return - An error on mismatch.
     private function yamlDirective() returns (LexicalError|ParsingError)? {
         // Expect a separate in line.
         check self.checkToken(SEPARATION_IN_LINE);
@@ -146,7 +146,7 @@ class Parser {
 
     # Initialize the lexer with the attributes of a new line.
     #
-    # + message - Error messgae to display when if the initalization fails 
+    # + message - Error message to display when if the initialization fails 
     # + incrementLine - Sets the next line to the lexer
     # + return - An error if it fails to initialize  
     private function initLexer(string message, boolean incrementLine = true) returns ParsingError? {
@@ -184,7 +184,7 @@ class Parser {
     #
     # + messageType - Number of the template message
     # + expectedTokens - Predicted tokens  
-    # + beforeToken - Toekn before the predicetd token  
+    # + beforeToken - Token before the predicted token  
     # + value - Any value name. Commonly used to indicate keys.
     # + return - If success, the generated error message. Else, an error message.
     private function formatErrorMessage(
@@ -199,12 +199,12 @@ class Parser {
                     return error("Token parameters cannot be null for this template error message.");
                 }
                 string expectedTokensMessage;
-                if (expectedTokens is YAMLToken[]) { // If multiplke tokens
+                if (expectedTokens is YAMLToken[]) { // If multiple tokens
                     string tempMessage = expectedTokens.reduce(function(string message, YAMLToken token) returns string {
                         return message + " '" + token + "' or";
                     }, "");
                     expectedTokensMessage = tempMessage.substring(0, tempMessage.length() - 3);
-                } else { // If a singel token
+                } else { // If a single token
                     expectedTokensMessage = " '" + expectedTokens + "'";
                 }
                 return "Expected" + expectedTokensMessage + " after '" + beforeToken + "', but found '" + self.currentToken.token + "'";

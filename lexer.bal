@@ -33,7 +33,7 @@ class Lexer {
     # Line to be lexically analyzed
     string line = "";
 
-    # Value of the generateed token
+    # Value of the generated token
     string lexeme = "";
 
     # Current state of the Lexer
@@ -185,7 +185,7 @@ class Lexer {
             return self.iterate(self.uriCharacter, TAG_PREFIX);
         }
 
-        // Match the global prefix with hexa-decimal value
+        // Match the global prefix with hexadecimal value
         if (self.peek() == "%") {
             self.lexeme += "%";
 
@@ -286,15 +286,15 @@ class Lexer {
         // Check for unicode characters
         match currentChar {
             "x" => {
-                check self.unicodeEscaedCharacter("x", 2);
+                check self.unicodeEscapedCharacters("x", 2);
                 return;
             }
             "u" => {
-                check self.unicodeEscaedCharacter("u", 4);
+                check self.unicodeEscapedCharacters("u", 4);
                 return;
             }
             "U" => {
-                check self.unicodeEscaedCharacter("U", 8);
+                check self.unicodeEscapedCharacters("U", 8);
                 return;
             }
         }
@@ -306,7 +306,7 @@ class Lexer {
     # + escapedChar - Escaped character before the digits  
     # + length - Number of digits
     # + return - An error on failure
-    private function unicodeEscaedCharacter(string escapedChar, int length) returns LexicalError? {
+    private function unicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
         
         // Check if the required digits do not overflow the current line.
         if self.line.length() < length + self.index {
@@ -327,7 +327,7 @@ class Lexer {
 
     # Process double quoted scalar values.
     # 
-    # + return - False to continue. True to termiante the token. An error on failure.
+    # + return - False to continue. True to terminate the token. An error on failure.
     private function doubleQuoteChar() returns boolean|LexicalError {
         // Process nb-json characters
         if self.matchRegexPattern(JSON_PATTERN, self.index, ["\\\\", "\""]) {
@@ -335,7 +335,7 @@ class Lexer {
             return false;
         }
 
-        // Prcoess escaed characters
+        // Process escaped characters
         if (self.peek() == "\\") {
             self.forward();
             check self.escapedCharacter();
@@ -345,9 +345,9 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(DOUBLE_QUOTE_CHAR));
     }
 
-    # Scan the lexem for URI characters
+    # Scan the lexeme for URI characters
     # 
-    # + return - False to continue. True to termiante the token. An error on failure.
+    # + return - False to continue. True to terminate the token. An error on failure.
     private function uriCharacter() returns boolean|LexicalError {
 
         // Check for URI characters
@@ -383,7 +383,7 @@ class Lexer {
 
     # Description
     # 
-    # + return - False to continue. True to termiante the token. An error on failure.
+    # + return - False to continue. True to terminate the token. An error on failure.
     private function tagHandle() returns boolean|LexicalError {
         
         // Scan the word of the name tag.
@@ -402,7 +402,7 @@ class Lexer {
 
     # Scan the lexeme for the anchor name.
     # 
-    # + return - False to continue. True to termiante the token. An error on failure.
+    # + return - False to continue. True to terminate the token. An error on failure.
     private function anchorName() returns boolean|LexicalError {
         if (self.matchRegexPattern([PRINTABLE_PATTERN], self.index, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
             self.lexeme += <string>self.peek();
@@ -411,19 +411,19 @@ class Lexer {
         return true;
     }
 
-    # Scan the whitespaces for a line-in-separation.
+    # Scan the white spaces for a line-in-separation.
     # 
-    # + return - False to continue. True to termiante the token.
+    # + return - False to continue. True to terminate the token.
     private function whitespace() returns boolean {
         if (self.peek() == " ") {
             return false;
         }
         return true;
     }
-    # Check for the lexems to crete an DECIMAL token.
+    # Check for the lexemes to crete an DECIMAL token.
     #
     # + digitPattern - Regex pattern of the number system
-    # + return - Generates a function which checks the lexems for the given number system.  
+    # + return - Generates a function which checks the lexemes for the given number system.  
     private function digit(string digitPattern) returns function () returns boolean|LexicalError {
         return function() returns boolean|LexicalError {
             if (self.matchRegexPattern(digitPattern, self.index)) {
@@ -434,12 +434,12 @@ class Lexer {
         };
     }
 
-    # Encapsulate a function to run isolatedly on the remaining characters.
-    # Function lookaheads to capture the lexems for a targetted token.
+    # Encapsulate a function to run isolated on the remaining characters.
+    # Function lookahead to capture the lexemes for a targeted token.
     #
     # + process - Function to be executed on each iteration  
     # + successToken - Token to be returned on successful traverse of the characters  
-    # + message - Message to display if the end delimeter is not shown  
+    # + message - Message to display if the end delimiter is not shown  
     # + include - True when the last char belongs to the token
     # + return - Lexical Error if available
     private function iterate(function () returns boolean|LexicalError process,
@@ -470,7 +470,7 @@ class Lexer {
         return self.index + k < self.line.length() ? self.line[self.index + k] : ();
     }
 
-    # Incremetn the index of the column by k indexes
+    # Increment the index of the column by k indexes
     #
     # + k - Number of indexes to forward. Default = 1
     private function forward(int k = 1) {
@@ -483,8 +483,8 @@ class Lexer {
     #
     # + inclusionPatterns - Included the regex patterns
     # + index - Index of the character. Default = self.index  
-    # + exclusionPatterns - Exclude the regex pattenrs
-    # + return - True if the pattern mathces
+    # + exclusionPatterns - Exclude the regex patterns
+    # + return - True if the pattern matches
     private function matchRegexPattern(string|string[] inclusionPatterns, int? index = (), string|string[]? exclusionPatterns = ()) returns boolean {
         string inclusionPattern = "[" + self.concatenateStringArray(inclusionPatterns) + "]";
         string exclusionPattern = "";
@@ -558,7 +558,7 @@ class Lexer {
     # Generates a Lexical Error.
     #
     # + message - Error message  
-    # + return - Constructed Lexcial Error message
+    # + return - Constructed Lexical Error message
     private function generateError(string message) returns LexicalError {
         string text = "Lexical Error at line "
                         + (self.lineNumber + 1).toString()
