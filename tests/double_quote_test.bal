@@ -29,8 +29,8 @@ function escapedCharacterDataGen() returns map<[string, string]> {
         "paragraph-separator": ["P", "\u{2029}"],
         "space": [" ", " "],
         "x-2": ["x41", "A"],
-        "u-4": ["0041", "A"],
-        "U-8": ["00000041", "A"]
+        "u-4": ["u0041", "A"],
+        "U-8": ["U00000041", "A"]
     };
 }
 
@@ -38,18 +38,15 @@ function escapedCharacterDataGen() returns map<[string, string]> {
     dataProvider: invalidEscapedCharDataGen,
     groups: ["escaped"]
 }
-function testInvalidExcapedCharacter(string lexeme) {
+function testInvalidEscapedCharacter(string lexeme) {
     assertLexicalError("\\" + lexeme, state = LEXER_DOUBLE_QUOTE);
 }
 
 function invalidEscapedCharDataGen() returns map<[string]> {
     return {
         "x-1": ["x1"],
-        "x-3": ["x333"],
         "u-3": ["u333"],
-        "u-5": ["u55555"],
-        "U-7": ["u7777777"],
-        "U-9": ["u999999999"],
+        "U-7": ["U7777777"],
         "no-char": [""],
         "invalid-char": ["z"]
     };

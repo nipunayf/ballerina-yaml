@@ -265,7 +265,7 @@ class Lexer {
 
     # Scan lexemes for the escaped characters.
     # Adds the processed escaped character to the lexeme.
-    # 
+    #
     # + return - An error on failure
     private function escapedCharacter() returns LexicalError? {
         string currentChar;
@@ -307,22 +307,37 @@ class Lexer {
     # + length - Number of digits
     # + return - An error on failure
     private function unicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
-        
+
         // Check if the required digits do not overflow the current line.
-        if self.line.length() < length + self.index {
+        if self.line.length() <= length + self.index {
             return self.generateError("Expected " + length.toString() + " characters for the '\\" + escapedChar + "' unicode escape");
         }
 
         string unicodeDigits = "";
 
         // Check if the digits adhere to the hexadecimal code pattern.
-        foreach int i in 0 ... length {
+        foreach int i in 0 ... length - 1 {
+            self.forward();
             if self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN) {
                 unicodeDigits += <string>self.peek();
-                self.forward();
+                continue;
             }
-            return self.generateError(self.formatErrorMessage("unicode hex"));
+            return self.generateError(self.formatErrorMessage("unicode hex escape"));
         }
+
+        // Check if the lexeme can be converted to hexadecimal
+        int|error hexResult = 'int:fromHexString(unicodeDigits);
+        if hexResult is error {
+            return self.generateError('error:message(hexResult));
+        }
+
+        // Check if there exists a unicode string for the hexadecimal value
+        string|error unicodeResult = 'string:fromCodePointInt(hexResult);
+        if unicodeResult is error {
+            return self.generateError('error:message(unicodeResult));
+        }
+
+        self.lexeme += unicodeResult;
     }
 
     # Process double quoted scalar values.
