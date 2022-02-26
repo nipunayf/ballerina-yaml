@@ -115,6 +115,7 @@ class Parser {
         self.lexer.state = LEXER_DOUBLE_QUOTE;
         string lexemeBuffer = "";
         boolean isFirstLine = true;
+        boolean emptyLine = false;
 
         check self.checkToken();
 
@@ -124,12 +125,27 @@ class Parser {
                 DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
                     // Add the space when there is a line break
                     if !isFirstLine {
-                        lexemeBuffer += " ";
+                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                        if emptyLine {
+                            emptyLine = false;
+                        } else {
+                            lexemeBuffer += " ";
+                        }
                     }
 
                     lexemeBuffer += self.currentToken.value;
                 }
                 EOL => { // Processing new lines
+                    lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    check self.initLexer("Expected to end the multi-line double string");
+                }
+                EMPTY_LINE => {
+                    if isFirstLine {
+                        lexemeBuffer += self.currentToken.value;
+                    } else {
+                        lexemeBuffer += "\n";
+                    }
+                    emptyLine = true;
                     check self.initLexer("Expected to end the multi-line double string");
                 }
                 _ => {
@@ -142,6 +158,27 @@ class Parser {
         }
 
         return lexemeBuffer;
+    }
+
+    # Find the first non-space character from tail.
+    #
+    # + value - String to be trimmed
+    # + return - Trimmed string
+    function trimTailWhitespace(string value) returns string {
+        int i = value.length() - 1;
+
+        if i < 1 {
+            return "";
+        }
+
+        while value[i] == " " || value[i] == "\t" {
+            if i < 1 {
+                break;
+            }
+            i -= 1;
+        }
+
+        return value.substring(0, i + 1);
     }
 
     # Assert the next lexer token with the predicted token.

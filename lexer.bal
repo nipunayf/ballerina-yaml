@@ -72,7 +72,7 @@ class Lexer {
 
         // Generate EOL token at the last index
         if (self.index >= self.line.length()) {
-            return self.index == 0 ? {token: EMPTY_LINE} : {token: EOL};
+            return self.index == 0 ? self.generateToken(EMPTY_LINE) : {token: EOL};
         }
 
         if (self.matchRegexPattern(LINE_BREAK_PATTERN)) {
@@ -100,6 +100,15 @@ class Lexer {
     }
 
     private function stateDoubleQuote() returns Token|LexicalError {
+        // Check for empty lines
+        if self.peek() == " " {
+            Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+            if self.peek() == () {
+                return self.generateToken(EMPTY_LINE);
+            }
+            self.lexeme += token.value;
+        }
+
         if self.peek() == "\"" {
             return self.generateToken(DOUBLE_QUOTE_DELIMITER);
         }
@@ -467,6 +476,7 @@ class Lexer {
     # + return - False to continue. True to terminate the token.
     private function scanWhitespace() returns boolean {
         if (self.peek() == " ") {
+            self.lexeme += " ";
             return false;
         }
         return true;
