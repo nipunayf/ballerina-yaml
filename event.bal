@@ -18,8 +18,8 @@ type DocumentStartEvent record {|
 type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
-    boolean implicit;
-    string style;
+    // boolean implicit = true;
+    // string style = ;
 |};
 
 type SequenceStartEvent record {|

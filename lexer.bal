@@ -39,6 +39,9 @@ class Lexer {
     # Current state of the Lexer
     State state = LEXER_START;
 
+    # Indentation of the current line   
+    int indent = 0;
+
     # Incremented when the lexer needs to be aware of the char count.
     private int charCounter = 0;
 
@@ -69,28 +72,11 @@ class Lexer {
 
         // Generate EOL token at the last index
         if (self.index >= self.line.length()) {
-            return {token: EOL};
-        }
-
-        match self.peek() {
-            " " => {
-                return self.iterate(self.whitespace, SEPARATION_IN_LINE);
-            }
-            "#" => { // Ignore comments
-                return self.generateToken(EOL);
-            }
-        }
-
-        if (self.matchRegexPattern(BOM_PATTERN)) {
-            return self.generateToken(BOM);
+            return self.index == 0 ? {token: EMPTY_LINE} : {token: EOL};
         }
 
         if (self.matchRegexPattern(LINE_BREAK_PATTERN)) {
             return self.generateToken(LINE_BREAK);
-        }
-
-        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
-            return self.iterate(self.digit(DECIMAL_DIGIT_PATTERN), DECIMAL);
         }
 
         match self.state {
@@ -114,13 +100,38 @@ class Lexer {
     }
 
     private function stateDoubleQuote() returns Token|LexicalError {
-        if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
-            return self.iterate(self.doubleQuoteChar, DOUBLE_QUOTE_CHAR);
+        if self.peek() == "\"" {
+            return self.generateToken(DOUBLE_QUOTE_DELIMITER);
         }
+
+        if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
+            return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
+        }
+
         return self.generateError(self.formatErrorMessage("double quotes flow style"));
     }
 
     private function stateDocumentOut() returns Token|LexicalError {
+        match self.peek() {
+            " " => {
+                // Return empty line if there is only whitespace
+                // Else, return separation in line
+                Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+                return self.peek() == () ? self.generateToken(EMPTY_LINE) : token;
+            }
+            "#" => { // Ignore comments
+                return self.generateToken(EOL);
+            }
+        }
+
+        if (self.matchRegexPattern(BOM_PATTERN)) {
+            return self.generateToken(BOM);
+        }
+
+        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
+            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
+        }
+
         match self.peek() {
             "-" => {
                 return self.tokensInSequence("---", DIRECTIVE_MARKER);
@@ -164,16 +175,19 @@ class Lexer {
                     _ => { // Check for named tag handles
                         self.lexeme = "!";
                         self.forward();
-                        return self.iterate(self.tagHandle, TAG_HANDLE, true);
+                        return self.iterate(self.scanTagHandle, TAG_HANDLE, true);
                     }
                 }
+            }
+            "\"" => { // Process double quote flow style value
+                return self.generateToken(DOUBLE_QUOTE_DELIMITER);
             }
         }
         return self.generateError(self.formatErrorMessage("document prefix"));
     }
 
     # Perform scanning for tag prefixes
-    # 
+    #
     # + return - The respective token on success. Else, an error.
     private function stateTagPrefix() returns Token|LexicalError {
 
@@ -182,7 +196,7 @@ class Lexer {
         || self.peek() == "!") {
             self.lexeme += <string>self.peek();
             self.forward();
-            return self.iterate(self.uriCharacter, TAG_PREFIX);
+            return self.iterate(self.scanURICharacter, TAG_PREFIX);
         }
 
         // Match the global prefix with hexadecimal value
@@ -199,7 +213,7 @@ class Lexer {
                     self.forward(3);
 
                     // Check for URI characters
-                    return self.iterate(self.uriCharacter, TAG_PREFIX);
+                    return self.iterate(self.scanURICharacter, TAG_PREFIX);
                 }
             }
         }
@@ -210,13 +224,29 @@ class Lexer {
     private function stateStart() returns Token|LexicalError {
 
         match self.peek() {
+            " " => {
+                // Return empty line if there is only whitespace
+                // Else, return separation in line
+                Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+                return self.peek() == () ? self.generateToken(EMPTY_LINE) : token;
+            }
+            "#" => { // Ignore comments
+                return self.generateToken(EOL);
+            }
+        }
+
+        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
+            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
+        }
+
+        match self.peek() {
             "&" => {
                 self.forward();
-                return self.iterate(self.anchorName, ANCHOR);
+                return self.iterate(self.scanAnchorName, ANCHOR);
             }
             "*" => {
                 self.forward();
-                return self.iterate(self.anchorName, ALIAS);
+                return self.iterate(self.scanAnchorName, ALIAS);
             }
             "-" => {
                 return self.generateToken(SEQUENCE_ENTRY);
@@ -260,18 +290,19 @@ class Lexer {
 
         }
 
-        return self.generateError("Invalid character");
+        return self.generateError(self.formatErrorMessage("indicator"));
     }
 
     # Scan lexemes for the escaped characters.
     # Adds the processed escaped character to the lexeme.
     #
     # + return - An error on failure
-    private function escapedCharacter() returns LexicalError? {
+    private function scanEscapedCharacter() returns LexicalError? {
         string currentChar;
 
-        // Check if the character is empty
+        // Process double escape character
         if (self.peek() == ()) {
+            //TODO: Check for empty lines
             return self.generateError("Escaped character cannot be empty");
         } else {
             currentChar = <string>self.peek();
@@ -286,15 +317,15 @@ class Lexer {
         // Check for unicode characters
         match currentChar {
             "x" => {
-                check self.unicodeEscapedCharacters("x", 2);
+                check self.scanUnicodeEscapedCharacters("x", 2);
                 return;
             }
             "u" => {
-                check self.unicodeEscapedCharacters("u", 4);
+                check self.scanUnicodeEscapedCharacters("u", 4);
                 return;
             }
             "U" => {
-                check self.unicodeEscapedCharacters("U", 8);
+                check self.scanUnicodeEscapedCharacters("U", 8);
                 return;
             }
         }
@@ -306,7 +337,7 @@ class Lexer {
     # + escapedChar - Escaped character before the digits  
     # + length - Number of digits
     # + return - An error on failure
-    private function unicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
+    private function scanUnicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
 
         // Check if the required digits do not overflow the current line.
         if self.line.length() <= length + self.index {
@@ -341,11 +372,11 @@ class Lexer {
     }
 
     # Process double quoted scalar values.
-    # 
+    #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function doubleQuoteChar() returns boolean|LexicalError {
+    private function scanDoubleQuoteChar() returns boolean|LexicalError {
         // Process nb-json characters
-        if self.matchRegexPattern(JSON_PATTERN, self.index, ["\\\\", "\""]) {
+        if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\\\\", "\""]) {
             self.lexeme += <string>self.peek();
             return false;
         }
@@ -353,17 +384,22 @@ class Lexer {
         // Process escaped characters
         if (self.peek() == "\\") {
             self.forward();
-            check self.escapedCharacter();
+            check self.scanEscapedCharacter();
             return false;
+        }
+
+        // Terminate when delimiter is found
+        if self.peek() == "\"" {
+            return true;
         }
 
         return self.generateError(self.formatErrorMessage(DOUBLE_QUOTE_CHAR));
     }
 
     # Scan the lexeme for URI characters
-    # 
+    #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function uriCharacter() returns boolean|LexicalError {
+    private function scanURICharacter() returns boolean|LexicalError {
 
         // Check for URI characters
         if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], self.index)) {
@@ -397,10 +433,10 @@ class Lexer {
     }
 
     # Description
-    # 
+    #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function tagHandle() returns boolean|LexicalError {
-        
+    private function scanTagHandle() returns boolean|LexicalError {
+
         // Scan the word of the name tag.
         if (self.matchRegexPattern(WORD_PATTERN, self.index)) {
             self.lexeme += <string>self.peek();
@@ -416,9 +452,9 @@ class Lexer {
     }
 
     # Scan the lexeme for the anchor name.
-    # 
+    #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function anchorName() returns boolean|LexicalError {
+    private function scanAnchorName() returns boolean|LexicalError {
         if (self.matchRegexPattern([PRINTABLE_PATTERN], self.index, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
             self.lexeme += <string>self.peek();
             return false;
@@ -427,9 +463,9 @@ class Lexer {
     }
 
     # Scan the white spaces for a line-in-separation.
-    # 
+    #
     # + return - False to continue. True to terminate the token.
-    private function whitespace() returns boolean {
+    private function scanWhitespace() returns boolean {
         if (self.peek() == " ") {
             return false;
         }
@@ -439,7 +475,7 @@ class Lexer {
     #
     # + digitPattern - Regex pattern of the number system
     # + return - Generates a function which checks the lexemes for the given number system.  
-    private function digit(string digitPattern) returns function () returns boolean|LexicalError {
+    private function scanDigit(string digitPattern) returns function () returns boolean|LexicalError {
         return function() returns boolean|LexicalError {
             if (self.matchRegexPattern(digitPattern, self.index)) {
                 self.lexeme += <string>self.peek();

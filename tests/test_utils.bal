@@ -61,6 +61,12 @@ function getToken(Lexer lexer, int index) returns Token|error {
     return token;
 }
 
+function assertParsingEvent(string|string[] lines, string value) returns error?{
+    Parser parser = new Parser((lines is string) ? [lines] : lines);
+    Event event = check parser.parse();
+    test:assertEquals((<ScalarEvent>event).value, value);
+}
+
 # Assert if an parsing error is generated during the parsing
 #
 # + lines - Lines to be parsed.

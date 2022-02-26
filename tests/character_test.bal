@@ -43,3 +43,26 @@ function testSeparationSpacesToken() returns error? {
     check assertToken(lexer, SEPARATION_IN_LINE);
     check assertToken(lexer, DECIMAL, lexeme = "1");
 }
+
+@test:Config {}
+function testEmptyLineToken() returns error? {
+    Lexer lexer = setLexerString("");
+    check assertToken(lexer, EMPTY_LINE);
+
+    lexer = setLexerString(" ");
+    check assertToken(lexer, EMPTY_LINE);
+}
+
+@test:Config {
+    dataProvider: lineFoldingDataGen
+}
+function testProcessLineFolding(string[] arr, string value) returns error? {
+    check assertParsingEvent(arr, value);
+}
+
+function lineFoldingDataGen() returns map<[string[], string]> {
+    return {
+        "space": [["\"as", "space\""], "as space"],
+        "space-empty": [["\"", "space\""], " space"]
+    };
+}

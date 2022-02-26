@@ -52,7 +52,12 @@ class Parser {
                         tags: self.tagHandles
                     };
                 }
-
+                DOUBLE_QUOTE_DELIMITER => {
+                    string value = check self.doubleQuoteScalar();
+                    return {
+                        value: value
+                    };
+                }
             }
         }
         return self.generateError("EOF is reached. Cannot generate any more events");
@@ -86,7 +91,7 @@ class Parser {
     # Update the yamlVersion of the document.
     #
     # + return - An error on mismatch.
-    private function yamlDirective() returns (LexicalError|ParsingError)? {
+    private function yamlDirective() returns LexicalError|ParsingError|() {
         // Expect a separate in line.
         check self.checkToken(SEPARATION_IN_LINE);
 
@@ -104,6 +109,39 @@ class Parser {
         }
 
         return self.generateError(check self.formatErrorMessage(2, value = "%YAML"));
+    }
+
+    private function doubleQuoteScalar() returns LexicalError|ParsingError|string {
+        self.lexer.state = LEXER_DOUBLE_QUOTE;
+        string lexemeBuffer = "";
+        boolean isFirstLine = true;
+
+        check self.checkToken();
+
+        // Iterate the content until the delimiter is found
+        while (self.currentToken.token != DOUBLE_QUOTE_DELIMITER) {
+            match self.currentToken.token {
+                DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
+                    // Add the space when there is a line break
+                    if !isFirstLine {
+                        lexemeBuffer += " ";
+                    }
+
+                    lexemeBuffer += self.currentToken.value;
+                }
+                EOL => { // Processing new lines
+                    check self.initLexer("Expected to end the multi-line double string");
+                }
+                _ => {
+                    return self.generateError(string `Invalid character '${self.currentToken.token}' inside the double quote`);
+                }
+            }
+
+            isFirstLine = false;
+            check self.checkToken();
+        }
+
+        return lexemeBuffer;
     }
 
     # Assert the next lexer token with the predicted token.

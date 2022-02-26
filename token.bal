@@ -39,6 +39,7 @@ enum YAMLToken {
     DOCUMENT_MARKER = "...",
     DOUBLE_QUOTE_DELIMITER = "\"",
     DOUBLE_QUOTE_CHAR,
+    EMPTY_LINE,
     EOL,
     DUMMY
 }

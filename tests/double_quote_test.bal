@@ -51,3 +51,13 @@ function invalidEscapedCharDataGen() returns map<[string]> {
         "invalid-char": ["z"]
     };
 }
+
+@test:Config {}
+function testDoubleFlowFolded() returns error?{
+    check assertParsingEvent(["\"folded ", "to a space,   ", " ", "to a line feed\""], "folded to a space,\nto a line feed");
+}
+
+@test:Config {}
+function testDoubleEscapedLineBreak() returns error?{
+    check assertParsingEvent(["\"folded     \\", "\\    non-content"], "folded \t \tnon-content");
+}
