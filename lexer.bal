@@ -311,8 +311,8 @@ class Lexer {
 
         // Process double escape character
         if (self.peek() == ()) {
-            //TODO: Check for empty lines
-            return self.generateError("Escaped character cannot be empty");
+            self.lexeme += "\\";
+            return;
         } else {
             currentChar = <string>self.peek();
         }

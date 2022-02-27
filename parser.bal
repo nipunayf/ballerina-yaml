@@ -116,6 +116,7 @@ class Parser {
         string lexemeBuffer = "";
         boolean isFirstLine = true;
         boolean emptyLine = false;
+        boolean escaped = false;
 
         check self.checkToken();
 
@@ -123,9 +124,20 @@ class Parser {
         while (self.currentToken.token != DOUBLE_QUOTE_DELIMITER) {
             match self.currentToken.token {
                 DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
+                    // Check for double escaped characters
+                    string lexeme = self.currentToken.value;
+                    if lexeme.length() > 0 && lexeme[lexeme.length() - 1] == "\\" {
+                        lexeme = lexeme.substring(0, lexeme.length() - 2);
+                        escaped = true;
+                    }
+
                     // Add the space when there is a line break
-                    if !isFirstLine {
-                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    else if !isFirstLine {
+                        if escaped {
+                            escaped = false;
+                        } else {
+                            lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                        }
                         if emptyLine {
                             emptyLine = false;
                         } else {
@@ -133,15 +145,19 @@ class Parser {
                         }
                     }
 
-                    lexemeBuffer += self.currentToken.value;
+                    lexemeBuffer += lexeme;
                 }
                 EOL => { // Processing new lines
-                    lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    if !escaped {
+                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    }
                     check self.initLexer("Expected to end the multi-line double string");
                 }
                 EMPTY_LINE => {
                     if isFirstLine {
                         lexemeBuffer += self.currentToken.value;
+                    } else if escaped {
+                        lexemeBuffer += self.currentToken.value + "\n";
                     } else {
                         lexemeBuffer += "\n";
                     }
