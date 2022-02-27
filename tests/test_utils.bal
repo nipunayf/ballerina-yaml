@@ -1,6 +1,6 @@
 import ballerina/test;
 
-const ORIGIN_FILE_PATH = "yaml/tests/resources/";
+const ORIGIN_FILE_PATH = "tests/resources/";
 
 # Returns a new lexer with the configured line for testing
 #
@@ -18,7 +18,7 @@ function setLexerString(string line, State lexerState = LEXER_START) returns Lex
 #
 # + lexer - Testing lexer  
 # + assertingToken - Expected TOML token  
-# + index - Index of the targetted token (default = 0) 
+# + index - Index of the targeted token (default = 0) 
 # + lexeme - Expected lexeme of the token (optional)
 # + return - Returns an lexical error if unsuccessful
 function assertToken(Lexer lexer, YAMLToken assertingToken, int index = 0, string lexeme = "") returns error? {
@@ -33,19 +33,19 @@ function assertToken(Lexer lexer, YAMLToken assertingToken, int index = 0, strin
 
 # Assert if a lexical error is generated during the tokenization
 #
-# + tomlString - String to generate a Lexer token  
-# + index - Index of the targetted token (defualt = 0)  
+# + yamlString - String to generate a Lexer token  
+# + index - Index of the targeted token (default = 0)  
 # + state - State of the lexer
-function assertLexicalError(string tomlString, int index = 0, State state = LEXER_START) {
-    Lexer lexer = setLexerString(tomlString, state);
+function assertLexicalError(string yamlString, int index = 0, State state = LEXER_START) {
+    Lexer lexer = setLexerString(yamlString, state);
     Token|error token = getToken(lexer, index);
     test:assertTrue(token is LexicalError);
 }
 
-# Obtian the token at the given index
+# Obtain the token at the given index
 #
 # + lexer - Testing lexer
-# + index - Index of the targetted token
+# + index - Index of the targeted token
 # + return - If success, returns the token. Else a Lexical Error.  
 function getToken(Lexer lexer, int index) returns Token|error {
     Token token;
@@ -59,4 +59,26 @@ function getToken(Lexer lexer, int index) returns Token|error {
     }
 
     return token;
+}
+
+function assertParsingEvent(string|string[] lines, string value) returns error?{
+    Parser parser = new Parser((lines is string) ? [lines] : lines);
+    Event event = check parser.parse();
+    test:assertEquals((<ScalarEvent>event).value, value);
+}
+
+# Assert if an parsing error is generated during the parsing
+#
+# + lines - Lines to be parsed.
+# + isLexical - If set, checks for Lexical errors. Else, checks for Parsing errors.
+function assertParsingError(string|string[] lines, boolean isLexical = false) {
+    Parser parser = new Parser((lines is string) ? [lines] : lines);
+    Event|error err = parser.parse();
+
+    if (isLexical) {
+        test:assertTrue(err is LexicalError);
+    } else {
+        test:assertTrue(err is ParsingError);
+    }
+
 }

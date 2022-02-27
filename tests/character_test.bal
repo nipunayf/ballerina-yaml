@@ -14,7 +14,7 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
         "sequence-entry": ["-", SEQUENCE_ENTRY],
         "mapping-key": ["?", MAPPING_KEY],
         "mapping-value": [":", MAPPING_VALUE],
-        "colleciton-entry": [",", SEPARATOR],
+        "collection-entry": [",", SEPARATOR],
         "sequence-start": ["[", SEQUENCE_START],
         "sequence-end": ["]", SEQUENCE_END],
         "mapping-start": ["{", MAPPING_START],
@@ -36,22 +36,30 @@ function testAliasToken() returns error? {
 
 @test:Config {}
 function testSeparationSpacesToken() returns error? {
-    Lexer lexer = setLexerString(" ");
-    check assertToken(lexer, SEPARATION_IN_LINE);
-
-    lexer = setLexerString("  1");
+    Lexer lexer = setLexerString("  1");
     check assertToken(lexer, SEPARATION_IN_LINE);
     check assertToken(lexer, DECIMAL, lexeme = "1");
 }
 
-// @test:Config {}
-// function testSingleQuotedFlowScalar() returns error? {
-//     Lexer lexer = setLexerString("'somevalue'");
-//     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-// }
+@test:Config {}
+function testEmptyLineToken() returns error? {
+    Lexer lexer = setLexerString("");
+    check assertToken(lexer, EMPTY_LINE);
 
-// @test:Config {}
-// function testSingleQuotedScalar() returns error? {
-//     Lexer lexer = setLexerString("\"somevalue\"");
-//     check assertToken(lexer, SCALAR, lexeme = "somevalue");
-// }
+    lexer = setLexerString(" ");
+    check assertToken(lexer, EMPTY_LINE);
+}
+
+@test:Config {
+    dataProvider: lineFoldingDataGen
+}
+function testProcessLineFolding(string[] arr, string value) returns error? {
+    check assertParsingEvent(arr, value);
+}
+
+function lineFoldingDataGen() returns map<[string[], string]> {
+    return {
+        "space": [["\"as", "space\""], "as space"],
+        "space-empty": [["\"", "space\""], " space"]
+    };
+}

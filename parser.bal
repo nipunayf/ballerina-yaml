@@ -14,6 +14,8 @@ class Parser {
     # Lexical analyzer tool for getting the tokens
     private Lexer lexer = new Lexer();
 
+    map<string> tagHandles = {};
+
     # YAML version of the document.
     string? yamlVersion = ();
 
@@ -25,26 +27,71 @@ class Parser {
     # Parse the initialized array of strings
     #
     # + return - Lexical or parsing error on failure
-    public function parse() returns (LexicalError|ParsingError)? {
+    public function parse() returns Event|LexicalError|ParsingError {
 
         // Iterating each line of the document.
         while self.lineIndex < self.numLines - 1 {
             check self.initLexer("Cannot open the YAML document");
+            self.lexer.state = LEXER_DOCUMENT_OUT;
             check self.checkToken();
 
             match self.currentToken.token {
                 DIRECTIVE => {
-                    if (self.currentToken.value == "YAML") {
+                    if (self.currentToken.value == "YAML") { // YAML directive
                         check self.yamlDirective();
                         check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
                     }
+                    else { // TAG directive
+                        check self.tagDirective();
+                        check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
+                    }
                 }
-
+                DIRECTIVE_MARKER => {
+                    return {
+                        docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
+                        tags: self.tagHandles
+                    };
+                }
+                DOUBLE_QUOTE_DELIMITER => {
+                    string value = check self.doubleQuoteScalar();
+                    return {
+                        value: value
+                    };
+                }
             }
         }
+        return self.generateError("EOF is reached. Cannot generate any more events");
     }
 
-    private function yamlDirective() returns (LexicalError|ParsingError)? {
+    # Check the grammar productions for TAG directives.
+    # Update the tag handles map.
+    #
+    # + return - An error on mismatch.
+    private function tagDirective() returns (LexicalError|ParsingError)? {
+        // Expect a separate in line
+        check self.checkToken(SEPARATION_IN_LINE);
+
+        // Expect a tag handle
+        check self.checkToken(TAG_HANDLE);
+        string tagHandle = self.currentToken.value;
+        check self.checkToken(SEPARATION_IN_LINE);
+
+        // Expect a tag prefix
+        self.lexer.state = LEXER_TAG_PREFIX;
+        check self.checkToken(TAG_PREFIX);
+        string tagPrefix = self.currentToken.value;
+
+        if (self.tagHandles.hasKey(tagHandle)) {
+            return self.generateError(check self.formatErrorMessage(2, value = tagHandle));
+        }
+        self.tagHandles[tagHandle] = tagPrefix;
+    }
+
+    # Check the grammar productions for YAML directives.
+    # Update the yamlVersion of the document.
+    #
+    # + return - An error on mismatch.
+    private function yamlDirective() returns LexicalError|ParsingError|() {
         // Expect a separate in line.
         check self.checkToken(SEPARATION_IN_LINE);
 
@@ -62,6 +109,92 @@ class Parser {
         }
 
         return self.generateError(check self.formatErrorMessage(2, value = "%YAML"));
+    }
+
+    private function doubleQuoteScalar() returns LexicalError|ParsingError|string {
+        self.lexer.state = LEXER_DOUBLE_QUOTE;
+        string lexemeBuffer = "";
+        boolean isFirstLine = true;
+        boolean emptyLine = false;
+        boolean escaped = false;
+
+        check self.checkToken();
+
+        // Iterate the content until the delimiter is found
+        while (self.currentToken.token != DOUBLE_QUOTE_DELIMITER) {
+            match self.currentToken.token {
+                DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
+                    // Check for double escaped characters
+                    string lexeme = self.currentToken.value;
+                    if lexeme.length() > 0 && lexeme[lexeme.length() - 1] == "\\" {
+                        lexeme = lexeme.substring(0, lexeme.length() - 2);
+                        escaped = true;
+                    }
+
+                    // Add the space when there is a line break
+                    else if !isFirstLine {
+                        if escaped {
+                            escaped = false;
+                        } else {
+                            lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                        }
+                        if emptyLine {
+                            emptyLine = false;
+                        } else {
+                            lexemeBuffer += " ";
+                        }
+                    }
+
+                    lexemeBuffer += lexeme;
+                }
+                EOL => { // Processing new lines
+                    if !escaped {
+                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    }
+                    check self.initLexer("Expected to end the multi-line double string");
+                }
+                EMPTY_LINE => {
+                    if isFirstLine {
+                        lexemeBuffer += self.currentToken.value;
+                    } else if escaped {
+                        lexemeBuffer += self.currentToken.value + "\n";
+                    } else {
+                        lexemeBuffer += "\n";
+                    }
+                    emptyLine = true;
+                    check self.initLexer("Expected to end the multi-line double string");
+                }
+                _ => {
+                    return self.generateError(string `Invalid character '${self.currentToken.token}' inside the double quote`);
+                }
+            }
+
+            isFirstLine = false;
+            check self.checkToken();
+        }
+
+        return lexemeBuffer;
+    }
+
+    # Find the first non-space character from tail.
+    #
+    # + value - String to be trimmed
+    # + return - Trimmed string
+    function trimTailWhitespace(string value) returns string {
+        int i = value.length() - 1;
+
+        if i < 1 {
+            return "";
+        }
+
+        while value[i] == " " || value[i] == "\t" {
+            if i < 1 {
+                break;
+            }
+            i -= 1;
+        }
+
+        return value.substring(0, i + 1);
     }
 
     # Assert the next lexer token with the predicted token.
@@ -104,7 +237,7 @@ class Parser {
 
     # Initialize the lexer with the attributes of a new line.
     #
-    # + message - Error messgae to display when if the initalization fails 
+    # + message - Error message to display when if the initialization fails 
     # + incrementLine - Sets the next line to the lexer
     # + return - An error if it fails to initialize  
     private function initLexer(string message, boolean incrementLine = true) returns ParsingError? {
@@ -142,7 +275,7 @@ class Parser {
     #
     # + messageType - Number of the template message
     # + expectedTokens - Predicted tokens  
-    # + beforeToken - Toekn before the predicetd token  
+    # + beforeToken - Token before the predicted token  
     # + value - Any value name. Commonly used to indicate keys.
     # + return - If success, the generated error message. Else, an error message.
     private function formatErrorMessage(
@@ -157,12 +290,12 @@ class Parser {
                     return error("Token parameters cannot be null for this template error message.");
                 }
                 string expectedTokensMessage;
-                if (expectedTokens is YAMLToken[]) { // If multiplke tokens
+                if (expectedTokens is YAMLToken[]) { // If multiple tokens
                     string tempMessage = expectedTokens.reduce(function(string message, YAMLToken token) returns string {
                         return message + " '" + token + "' or";
                     }, "");
                     expectedTokensMessage = tempMessage.substring(0, tempMessage.length() - 3);
-                } else { // If a singel token
+                } else { // If a single token
                     expectedTokensMessage = " '" + expectedTokens + "'";
                 }
                 return "Expected" + expectedTokensMessage + " after '" + beforeToken + "', but found '" + self.currentToken.token + "'";

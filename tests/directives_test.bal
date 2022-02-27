@@ -5,7 +5,7 @@ import ballerina/test;
     groups: ["directives"]
 }
 function testDirectivesToken(string lexeme, string value) returns error? {
-    Lexer lexer = setLexerString(lexeme);
+    Lexer lexer = setLexerString(lexeme, LEXER_DOCUMENT_OUT);
     check assertToken(lexer, DIRECTIVE, lexeme = value);
 }
 
@@ -20,8 +20,8 @@ function directiveDataGen() returns map<[string, string]> {
     groups: ["directives"]
 }
 function testAccurateYAMLDirective() returns error? {
-    Parser parser = new Parser(["%YAML 1.3"]);
-    check parser.parse();
+    Parser parser = new Parser(["%YAML 1.3", "---"]);
+    _ = check parser.parse();
 
     test:assertEquals(parser.yamlVersion, "1.3");
 }
@@ -30,21 +30,15 @@ function testAccurateYAMLDirective() returns error? {
     groups: ["directives"]
 }
 function testDuplicateYAMLDirectives() {
-    Parser parser = new Parser(["%YAML 1.3", "%YAML 1.1"]);
-    error? parseErr = parser.parse();
-
-    test:assertTrue(parseErr is ParsingError);
+    assertParsingError(["%YAML 1.3", "%YAML 1.1"]);
 }
 
 @test:Config {
     dataProvider: invalidDirectiveDataGen,
     groups: ["directives"]
 }
-function testInvalidYAMLDirectives(string yam) {
-    Parser parser = new Parser([yam]);
-    error? parseErr = parser.parse();
-
-    test:assertTrue(parseErr is ParsingError);
+function testInvalidYAMLDirectives(string line) {
+    assertParsingError(line);
 }
 
 function invalidDirectiveDataGen() returns map<[string]> {
@@ -59,7 +53,7 @@ function invalidDirectiveDataGen() returns map<[string]> {
     dataProvider: validTagDataGen
 }
 function testValidTagHandlers(string tag, string lexeme) returns error? {
-    Lexer lexer = setLexerString(tag);
+    Lexer lexer = setLexerString(tag, LEXER_DOCUMENT_OUT);
     check assertToken(lexer, TAG_HANDLE, lexeme = lexeme);
 }
 
@@ -99,5 +93,27 @@ function invalidUriHexDataGen() returns map<[string]> {
         "one digit": ["%a"],
         "no digit": ["%"],
         "two %": ["%1%"]
+    };
+}
+
+@test:Config {}
+function testTagDuplicates() {
+    assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
+}
+
+@test:Config {
+    dataProvider: tagHandlesDataGen
+}
+function testTagHandles(string line, string tagHandle, string tagPrefix) returns error? {
+    Parser parser = new Parser([line, "---"]);
+    _ = check parser.parse();
+    test:assertEquals(parser.tagHandles[tagHandle], tagPrefix);
+}
+
+function tagHandlesDataGen() returns map<[string, string, string]> {
+    return {
+        "primary": ["%TAG ! local ", "!", "local"],
+        "secondary": ["%TAG !! tag:global ", "!!", "tag:global"],
+        "named": ["%TAG !a! tag:named ", "!a!", "tag:named"]
     };
 }
