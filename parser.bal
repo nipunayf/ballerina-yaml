@@ -158,11 +158,13 @@ class Parser {
                     if !escaped { // If not escaped, trim the trailing white spaces
                         lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
                     }
+                    isFirstLine = false;
                     check self.initLexer("Expected to end the multi-line double string");
                 }
                 EMPTY_LINE => {
                     if isFirstLine { // Whitespace is preserved on the first line
                         lexemeBuffer += self.currentToken.value;
+                    isFirstLine = false;
                     } else if escaped { // Whitespace is preserved when escaped
                         lexemeBuffer += self.currentToken.value + "\n";
                     } else { // Whitespace is ignored when line folding
@@ -177,7 +179,6 @@ class Parser {
                 }
             }
 
-            isFirstLine = false;
             check self.checkToken();
         }
 
@@ -187,7 +188,7 @@ class Parser {
     private function singleQuoteScalar() returns ParsingError|LexicalError|string {
         self.lexer.state = LEXER_SINGLE_QUOTE;
         string lexemeBuffer = "";
-        boolean isFirstLine = false;
+        boolean isFirstLine = true;
         boolean emptyLine = false;
 
         check self.checkToken();
@@ -212,11 +213,13 @@ class Parser {
                 EOL => {
                     // Trim trailing white spaces
                     lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    isFirstLine = false;
                     check self.initLexer("Expected to end the multi-line double string");
                 }
                 EMPTY_LINE => {
                     if isFirstLine { // Whitespace is preserved on the first line
                         lexemeBuffer += self.currentToken.value;
+                        isFirstLine = false;
                     } else { // Whitespace is ignored when line folding
                         lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
                         lexemeBuffer += "\n";
@@ -228,8 +231,6 @@ class Parser {
                     return self.generateError("Expected to end the multi-line single quoted scalar");
                 }
             }
-
-            isFirstLine = false;
             check self.checkToken();
         }
 
@@ -259,7 +260,7 @@ class Parser {
 
     private function trimHeadWhitespace(string value) returns string {
         int len = value.length();
-        
+
         if len < 1 {
             return "";
         }

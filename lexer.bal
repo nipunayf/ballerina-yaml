@@ -135,8 +135,18 @@ class Lexer {
             self.lexeme += token.value;
         }
 
+        // Escaped single quote
+        if self.peek() == "'" && self.peek(1) == "'" {
+            self.lexeme += "'";
+            self.forward(2);
+        }
+
         // Terminating delimiter
         if self.peek() == "'" {
+            if self.lexeme.length() > 0 {
+                self.index -= 1;
+                return self.generateToken(SINGLE_QUOTE_CHAR);
+            }
             return self.generateToken(SINGLE_QUOTE_DELIMITER);
         }
 
@@ -448,6 +458,11 @@ class Lexer {
 
         // Terminate when the delimiter is found
         if self.peek() == "'" {
+            if self.peek(1) == "'" {
+                self.lexeme += "'";
+                self.forward();
+                return false;
+            }
             return true;
         }
 
