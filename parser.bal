@@ -55,7 +55,13 @@ class Parser {
                 DOUBLE_QUOTE_DELIMITER => {
                     string value = check self.doubleQuoteScalar();
                     return {
-                        value: value
+                        value
+                    };
+                }
+                SINGLE_QUOTE_DELIMITER => {
+                    string value = check self.singleQuoteScalar();
+                    return {
+                        value
                     };
                 }
             }
@@ -124,23 +130,24 @@ class Parser {
         while (self.currentToken.token != DOUBLE_QUOTE_DELIMITER) {
             match self.currentToken.token {
                 DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
-                    // Check for double escaped characters
                     string lexeme = self.currentToken.value;
+
+                    // Check for double escaped character
                     if lexeme.length() > 0 && lexeme[lexeme.length() - 1] == "\\" {
                         lexeme = lexeme.substring(0, lexeme.length() - 2);
                         escaped = true;
                     }
 
-                    // Add the space when there is a line break
                     else if !isFirstLine {
                         if escaped {
                             escaped = false;
-                        } else {
+                        } else { // Trim the white space if not escaped
                             lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
                         }
+
                         if emptyLine {
                             emptyLine = false;
-                        } else {
+                        } else { // Add a white space if there are not preceding empty lines
                             lexemeBuffer += " ";
                         }
                     }
@@ -148,28 +155,82 @@ class Parser {
                     lexemeBuffer += lexeme;
                 }
                 EOL => { // Processing new lines
-                    if !escaped {
+                    if !escaped { // If not escaped, trim the trailing white spaces
                         lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
                     }
+                    isFirstLine = false;
                     check self.initLexer("Expected to end the multi-line double string");
                 }
                 EMPTY_LINE => {
-                    if isFirstLine {
+                    if isFirstLine { // Whitespace is preserved on the first line
                         lexemeBuffer += self.currentToken.value;
-                    } else if escaped {
+                    isFirstLine = false;
+                    } else if escaped { // Whitespace is preserved when escaped
                         lexemeBuffer += self.currentToken.value + "\n";
-                    } else {
+                    } else { // Whitespace is ignored when line folding
+                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
                         lexemeBuffer += "\n";
                     }
                     emptyLine = true;
-                    check self.initLexer("Expected to end the multi-line double string");
+                    check self.initLexer("Expected to end the multi-line double quoted scalar");
                 }
                 _ => {
                     return self.generateError(string `Invalid character '${self.currentToken.token}' inside the double quote`);
                 }
             }
 
-            isFirstLine = false;
+            check self.checkToken();
+        }
+
+        return lexemeBuffer;
+    }
+
+    private function singleQuoteScalar() returns ParsingError|LexicalError|string {
+        self.lexer.state = LEXER_SINGLE_QUOTE;
+        string lexemeBuffer = "";
+        boolean isFirstLine = true;
+        boolean emptyLine = false;
+
+        check self.checkToken();
+
+        // Iterate the content until the delimiter is found
+        while self.currentToken.token != SINGLE_QUOTE_DELIMITER {
+            match self.currentToken.token {
+                SINGLE_QUOTE_CHAR => {
+                    string lexeme = self.currentToken.value;
+
+                    if isFirstLine {
+                        lexemeBuffer += lexeme;
+                    } else {
+                        if emptyLine {
+                            emptyLine = false;
+                        } else { // Add a white space if there are not preceding empty lines
+                            lexemeBuffer += " ";
+                        }
+                        lexemeBuffer += self.trimHeadWhitespace(lexeme);
+                    }
+                }
+                EOL => {
+                    // Trim trailing white spaces
+                    lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                    isFirstLine = false;
+                    check self.initLexer("Expected to end the multi-line double string");
+                }
+                EMPTY_LINE => {
+                    if isFirstLine { // Whitespace is preserved on the first line
+                        lexemeBuffer += self.currentToken.value;
+                        isFirstLine = false;
+                    } else { // Whitespace is ignored when line folding
+                        lexemeBuffer = self.trimTailWhitespace(lexemeBuffer);
+                        lexemeBuffer += "\n";
+                    }
+                    emptyLine = true;
+                    check self.initLexer("Expected to end the multi-line double quoted scalar");
+                }
+                _ => {
+                    return self.generateError("Expected to end the multi-line single quoted scalar");
+                }
+            }
             check self.checkToken();
         }
 
@@ -180,7 +241,7 @@ class Parser {
     #
     # + value - String to be trimmed
     # + return - Trimmed string
-    function trimTailWhitespace(string value) returns string {
+    private function trimTailWhitespace(string value) returns string {
         int i = value.length() - 1;
 
         if i < 1 {
@@ -195,6 +256,24 @@ class Parser {
         }
 
         return value.substring(0, i + 1);
+    }
+
+    private function trimHeadWhitespace(string value) returns string {
+        int len = value.length();
+
+        if len < 1 {
+            return "";
+        }
+
+        int i = 0;
+        while value[i] == " " || value == "\t" {
+            if i == len - 1 {
+                break;
+            }
+            i += 1;
+        }
+
+        return value.substring(i);
     }
 
     # Assert the next lexer token with the predicted token.
