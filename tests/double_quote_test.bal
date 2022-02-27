@@ -47,17 +47,21 @@ function invalidEscapedCharDataGen() returns map<[string]> {
         "x-1": ["x1"],
         "u-3": ["u333"],
         "U-7": ["U7777777"],
-        "no-char": [""],
         "invalid-char": ["z"]
     };
 }
 
-@test:Config {}
-function testDoubleFlowFolded() returns error?{
-    check assertParsingEvent(["\"folded ", "to a space,   ", " ", "to a line feed\""], "folded to a space,\nto a line feed");
+@test:Config {
+    dataProvider: doubleQuoteLineBreakDataGen
+}
+function testDoubleQuoteLineBreakEvent(string[] arr, string value) returns error? {
+    check assertParsingEvent(arr, value);
 }
 
-@test:Config {}
-function testDoubleEscapedLineBreak() returns error?{
-    check assertParsingEvent(["\"folded     \\", "\\    non-content"], "folded \t \tnon-content");
+function doubleQuoteLineBreakDataGen() returns map<[string[], string]> {
+    return {
+        "flow-folded": [["\"folded ", "to a space,   ", " ", "to a line feed\""], "folded to a space,\nto a line feed"],
+        "escaped-line-break": [["\"folded to \\", " non-content\""], "folded to  non-content"],
+        "first-line-space": [["\"space \""], "space "]
+    };
 }

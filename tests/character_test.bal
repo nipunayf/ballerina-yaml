@@ -14,7 +14,7 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
         "sequence-entry": ["-", SEQUENCE_ENTRY],
         "mapping-key": ["?", MAPPING_KEY],
         "mapping-value": [":", MAPPING_VALUE],
-        "colleciton-entry": [",", SEPARATOR],
+        "collection-entry": [",", SEPARATOR],
         "sequence-start": ["[", SEQUENCE_START],
         "sequence-end": ["]", SEQUENCE_END],
         "mapping-start": ["{", MAPPING_START],
