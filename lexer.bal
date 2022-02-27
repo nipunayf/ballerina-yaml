@@ -92,6 +92,9 @@ class Lexer {
             LEXER_DOUBLE_QUOTE => {
                 return check self.stateDoubleQuote();
             }
+            LEXER_SINGLE_QUOTE => {
+                return check self.stateSingleQuote();
+            }
             _ => {
                 return self.generateError("Invalid state");
             }
@@ -109,15 +112,40 @@ class Lexer {
             self.lexeme += token.value;
         }
 
+        // Terminating delimiter
         if self.peek() == "\"" {
             return self.generateToken(DOUBLE_QUOTE_DELIMITER);
         }
 
+        // Regular double quoted characters
         if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
         }
 
         return self.generateError(self.formatErrorMessage("double quotes flow style"));
+    }
+
+    private function stateSingleQuote() returns Token|LexicalError {
+        // Check for empty lines
+        if self.peek() == " " {
+            Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+            if self.peek() == () {
+                return self.generateToken(EMPTY_LINE);
+            }
+            self.lexeme += token.value;
+        }
+
+        // Terminating delimiter
+        if self.peek() == "'" {
+            return self.generateToken(SINGLE_QUOTE_DELIMITER);
+        }
+
+        // Regular single quoted characters
+        if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["'"]) {
+            return self.iterate(self.scanSingleQuotedChar, SINGLE_QUOTE_CHAR);
+        }
+
+        return self.generateError(self.formatErrorMessage("single quote flow style"));
     }
 
     private function stateDocumentOut() returns Token|LexicalError {
@@ -190,6 +218,9 @@ class Lexer {
             }
             "\"" => { // Process double quote flow style value
                 return self.generateToken(DOUBLE_QUOTE_DELIMITER);
+            }
+            "'" => {
+                return self.generateToken(SINGLE_QUOTE_DELIMITER);
             }
         }
         return self.generateError(self.formatErrorMessage("document prefix"));
@@ -403,6 +434,24 @@ class Lexer {
         }
 
         return self.generateError(self.formatErrorMessage(DOUBLE_QUOTE_CHAR));
+    }
+
+    # Process double quoted scalar values.
+    #
+    # + return - False to continue. True to terminate the token. An error on failure.
+    private function scanSingleQuotedChar() returns boolean|LexicalError {
+        // Process nb-json characters
+        if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["'"]) {
+            self.lexeme += <string>self.peek();
+            return false;
+        }
+
+        // Terminate when the delimiter is found
+        if self.peek() == "'" {
+            return true;
+        }
+
+        return self.generateError(self.formatErrorMessage(SINGLE_QUOTE_CHAR));
     }
 
     # Scan the lexeme for URI characters
