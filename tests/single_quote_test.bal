@@ -15,3 +15,19 @@ function singleQuoteDataGen() returns map<[string[], string]> {
         "multi-line": [["' 1st non-empty",""," 2nd non-empty ","3rd non-empty '"], " 1st non-empty\n2nd non-empty 3rd non-empty "]
     };
 }
+
+@test:Config {
+    dataProvider: planarDataGen
+}
+function testPlanarToken(string line, string lexeme) returns error? {
+    Lexer lexer = setLexerString(line, LEXER_DOCUMENT_OUT);
+    check assertToken(lexer, PLANAR_CHAR, lexeme = lexeme);
+}
+
+function planarDataGen() returns map<[string, string]> {
+    return {
+        ":": ["::", "::"],
+        "?": ["??", "??"],
+        "-": ["--", "--"]
+    };
+}
