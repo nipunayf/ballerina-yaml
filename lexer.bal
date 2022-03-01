@@ -20,6 +20,7 @@ enum RegexPattern {
 enum State {
     LEXER_START,
     LEXER_TAG_PREFIX,
+    LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
     LEXER_SINGLE_QUOTE
@@ -86,6 +87,9 @@ class Lexer {
             }
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
+            }
+            LEXER_DIRECTIVE => {
+                return check self.stateDirective();
             }
             LEXER_DOCUMENT_OUT => {
                 return check self.stateDocumentOut();
@@ -159,6 +163,20 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("single quote flow style"));
     }
 
+    private function stateDirective() returns Token|LexicalError {
+        // Check for decimal digits
+        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
+            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
+        }
+
+        // Check for decimal point
+        if self.peek() == "." {
+            return self.generateToken(DOT);
+        }
+
+        return self.generateError(self.formatErrorMessage("version number"));
+    }
+
     private function stateDocumentOut() returns Token|LexicalError {
         match self.peek() {
             " " => {
@@ -177,10 +195,6 @@ class Lexer {
             return self.generateToken(BOM);
         }
 
-        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
-            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
-        }
-
         match self.peek() {
             "-" => {
                 // Scan for directive marker
@@ -197,10 +211,7 @@ class Lexer {
                 }
             }
             "." => {
-                if (self.peek(1) == ".") {
-                    return self.tokensInSequence("...", DOCUMENT_MARKER);
-                }
-                return self.generateToken(DOT);
+                return self.tokensInSequence("...", DOCUMENT_MARKER);
             }
             "%" => { // Directive line
                 self.forward();
@@ -228,7 +239,7 @@ class Lexer {
                         return self.generateToken(TAG_HANDLE);
                     }
                     () => {
-                        return self.generateError("Expected a '" + SEPARATION_IN_LINE + "' after primary tag handle");
+                        return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
                     }
                     _ => { // Check for named tag handles
                         self.lexeme = "!";

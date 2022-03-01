@@ -42,3 +42,8 @@ function testSeparateInLineAfterPlanar() returns error? {
     check assertToken(lexer, PLANAR_CHAR, lexeme = "planar space");
     check assertToken(lexer, SEPARATION_IN_LINE);
 }
+
+@test:Config {}
+function testMultilinePlanarEvent() returns error?{
+    check assertParsingEvent(["1st non-empty"," "," 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
+}
