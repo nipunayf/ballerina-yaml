@@ -35,3 +35,10 @@ function planarDataGen() returns map<[string, string]> {
         "space": ["plain space", "plain space"]
     };
 }
+
+@test:Config {}
+function testSeparateInLineAfterPlanar() returns error? {
+    Lexer lexer = setLexerString("planar space      ", LEXER_DOCUMENT_OUT);
+    check assertToken(lexer, PLANAR_CHAR, lexeme = "planar space");
+    check assertToken(lexer, SEPARATION_IN_LINE);
+}

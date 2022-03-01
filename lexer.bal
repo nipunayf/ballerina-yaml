@@ -164,8 +164,9 @@ class Lexer {
             " " => {
                 // Return empty line if there is only whitespace
                 // Else, return separation in line
+                boolean isFirstChar = self.index == 0;
                 Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                return self.peek() == () ? self.generateToken(EMPTY_LINE) : token;
+                return (self.peek() == () && isFirstChar) ? self.generateToken(EMPTY_LINE) : token;
             }
             "#" => { // Ignore comments
                 return self.generateToken(EOL);
@@ -500,6 +501,12 @@ class Lexer {
             whitespace += <string>self.peek();
             numWhitespace += 1;
             self.forward();
+        }
+
+        // Check if EOL is reached
+        if self.peek() == () {
+            self.forward(-numWhitespace);
+            return true;
         }
 
         // Process ns-plain-safe character
