@@ -29,6 +29,9 @@ function planarDataGen() returns map<[string, string]> {
         "ns-char": ["ns", "ns"],
         ":": ["::", "::"],
         "?": ["??", "??"],
-        "-": ["--", "--"]
+        "-": ["--", "--"],
+        "ignore-comment": ["plain #comment", "plain"],
+        "#": ["plain#comment", "plain#comment"],
+        "space": ["plain space", "plain space"]
     };
 }

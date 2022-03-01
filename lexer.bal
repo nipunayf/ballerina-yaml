@@ -330,12 +330,6 @@ class Lexer {
             "-" => {
                 return self.generateToken(SEQUENCE_ENTRY);
             }
-            "'" => { //TODO: Single-quoted flow scalar
-
-            }
-            "\"" => {
-                return self.generateToken(DOUBLE_QUOTE_DELIMITER);
-            }
             "|" => { // Literal block scalar
                 return self.generateToken(LITERAL);
             }
@@ -499,13 +493,47 @@ class Lexer {
     }
 
     private function scanPlanarChar() returns boolean|LexicalError {
+        // Store the whitespace before a ns-planar char
+        string whitespace = "";
+        int numWhitespace = 0;
+        while self.peek() == "\t" || self.peek() == " " {
+            whitespace += <string>self.peek();
+            numWhitespace += 1;
+            self.forward();
+        }
+
         // Process ns-plain-safe character
         //TODO: exclude flow indicator where necessary
-        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
-            self.lexeme += <string>self.peek();
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+            self.lexeme += whitespace + <string>self.peek();
             return false;
         }
 
+        // Check for comments with a space before it
+        if self.peek() == "#" {
+            if self.peek(-1) == " " {
+                return true;
+            }
+            self.lexeme += whitespace + "#";
+            return false;
+        }
+
+        // Check for mapping value with a space after it 
+        if self.peek() == ":" {
+            if self.peek() == " " {
+                return true;
+            }
+            self.lexeme += whitespace + ":";
+            return false;
+        }
+
+        // If the whitespace is at the trail, discard it from the planar chars
+        if numWhitespace > 0 {
+            self.forward(-numWhitespace);
+            return true;
+        }
+
+        //TODO: consider the actions for incorrect planar char
         return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
     }
 
@@ -579,7 +607,7 @@ class Lexer {
     #
     # + return - False to continue. True to terminate the token.
     private function scanWhitespace() returns boolean {
-        if (self.peek() == " ") {
+        if self.peek() == " " {
             self.lexeme += " ";
             return false;
         }
