@@ -26,6 +26,7 @@ function testPlanarToken(string line, string lexeme) returns error? {
 
 function planarDataGen() returns map<[string, string]> {
     return {
+        "ns-char": ["ns", "ns"],
         ":": ["::", "::"],
         "?": ["??", "??"],
         "-": ["--", "--"]
