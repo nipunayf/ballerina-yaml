@@ -12,13 +12,15 @@ enum RegexPattern {
     WORD_PATTERN = "a-zA-Z0-9\\-",
     FLOW_INDICATOR_PATTERN = "\\,\\[\\]\\{\\}",
     WHITESPACE_PATTERN = "\\s\\t",
-    URI_CHAR_PATTERN = "#;/\\?:@&=\\+\\$,_\\.!~\\*'\\(\\)\\[\\]"
+    URI_CHAR_PATTERN = "#;/\\?:@&=\\+\\$,_\\.!~\\*'\\(\\)\\[\\]",
+    INDICATOR_PATTERN = "\\-\\?:\\,\\[\\]\\{\\}#&\\*!\\|\\>\\'\\\"%@\\`"
 }
 
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
     LEXER_TAG_PREFIX,
+    LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
     LEXER_SINGLE_QUOTE
@@ -85,6 +87,9 @@ class Lexer {
             }
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
+            }
+            LEXER_DIRECTIVE => {
+                return check self.stateDirective();
             }
             LEXER_DOCUMENT_OUT => {
                 return check self.stateDocumentOut();
@@ -158,13 +163,28 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("single quote flow style"));
     }
 
+    private function stateDirective() returns Token|LexicalError {
+        // Check for decimal digits
+        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
+            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
+        }
+
+        // Check for decimal point
+        if self.peek() == "." {
+            return self.generateToken(DOT);
+        }
+
+        return self.generateError(self.formatErrorMessage("version number"));
+    }
+
     private function stateDocumentOut() returns Token|LexicalError {
         match self.peek() {
             " " => {
                 // Return empty line if there is only whitespace
                 // Else, return separation in line
+                boolean isFirstChar = self.index == 0;
                 Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                return self.peek() == () ? self.generateToken(EMPTY_LINE) : token;
+                return (self.peek() == () && isFirstChar) ? self.generateToken(EMPTY_LINE) : token;
             }
             "#" => { // Ignore comments
                 return self.generateToken(EOL);
@@ -175,32 +195,34 @@ class Lexer {
             return self.generateToken(BOM);
         }
 
-        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
-            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
-        }
-
         match self.peek() {
             "-" => {
-                return self.tokensInSequence("---", DIRECTIVE_MARKER);
+                // Scan for directive marker
+                if self.peek(1) == "-" && self.peek(2) == "-" {
+                    self.forward(2);
+                    return self.generateToken(DIRECTIVE_MARKER);
+                }
+
+                // Scan for planar characters
+                self.lexeme += "-";
+                self.forward();
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                    return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+                }
             }
             "." => {
-                if (self.peek(1) == ".") {
-                    return self.tokensInSequence("...", DOCUMENT_MARKER);
-                }
-                return self.generateToken(DOT);
+                return self.tokensInSequence("...", DOCUMENT_MARKER);
             }
             "%" => { // Directive line
-                match self.peek(1) {
+                self.forward();
+                match self.peek() {
                     "T" => {
-                        self.forward();
                         return check self.tokensInSequence("TAG", DIRECTIVE);
                     }
                     "Y" => {
-                        self.forward();
                         return check self.tokensInSequence("YAML", DIRECTIVE);
                     }
                     _ => {
-                        self.forward();
                         return self.generateError(self.formatErrorMessage(DIRECTIVE));
                     }
                 }
@@ -217,7 +239,7 @@ class Lexer {
                         return self.generateToken(TAG_HANDLE);
                     }
                     () => {
-                        return self.generateError("Expected a '" + SEPARATION_IN_LINE + "' after primary tag handle");
+                        return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
                     }
                     _ => { // Check for named tag handles
                         self.lexeme = "!";
@@ -226,12 +248,31 @@ class Lexer {
                     }
                 }
             }
+            ":" => {
+                self.lexeme += ":";
+                self.forward();
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                    return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+                }
+            }
+            "?" => {
+                self.lexeme += "?";
+                self.forward();
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                    return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+                }
+            }
             "\"" => { // Process double quote flow style value
                 return self.generateToken(DOUBLE_QUOTE_DELIMITER);
             }
             "'" => {
                 return self.generateToken(SINGLE_QUOTE_DELIMITER);
             }
+        }
+
+        // Check for first character of planar scalar
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
+            return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
         }
         return self.generateError(self.formatErrorMessage("document prefix"));
     }
@@ -254,11 +295,11 @@ class Lexer {
             self.lexeme += "%";
 
             // Match the first digit of the tag char
-            if (self.peek(1) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, self.index + 1)) {
+            if (self.peek(1) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 1)) {
                 self.lexeme += self.line[self.index + 1];
 
                 // Match the second digit of the tag char
-                if (self.peek(2) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, self.index + 2)) {
+                if (self.peek(2) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 2)) {
                     self.lexeme += self.line[self.index + 2];
                     self.forward(3);
 
@@ -300,12 +341,6 @@ class Lexer {
             }
             "-" => {
                 return self.generateToken(SEQUENCE_ENTRY);
-            }
-            "'" => { //TODO: Single-quoted flow scalar
-
-            }
-            "\"" => {
-                return self.generateToken(DOUBLE_QUOTE_DELIMITER);
             }
             "|" => { // Literal block scalar
                 return self.generateToken(LITERAL);
@@ -469,13 +504,64 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(SINGLE_QUOTE_CHAR));
     }
 
+    private function scanPlanarChar() returns boolean|LexicalError {
+        // Store the whitespace before a ns-planar char
+        string whitespace = "";
+        int numWhitespace = 0;
+        while self.peek() == "\t" || self.peek() == " " {
+            whitespace += <string>self.peek();
+            numWhitespace += 1;
+            self.forward();
+        }
+
+        // Check if EOL is reached
+        if self.peek() == () {
+            self.forward(-numWhitespace);
+            return true;
+        }
+
+        // Process ns-plain-safe character
+        //TODO: exclude flow indicator where necessary
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+            self.lexeme += whitespace + <string>self.peek();
+            return false;
+        }
+
+        // Check for comments with a space before it
+        if self.peek() == "#" {
+            if self.peek(-1) == " " {
+                return true;
+            }
+            self.lexeme += whitespace + "#";
+            return false;
+        }
+
+        // Check for mapping value with a space after it 
+        if self.peek() == ":" {
+            if self.peek() == " " {
+                return true;
+            }
+            self.lexeme += whitespace + ":";
+            return false;
+        }
+
+        // If the whitespace is at the trail, discard it from the planar chars
+        if numWhitespace > 0 {
+            self.forward(-numWhitespace);
+            return true;
+        }
+
+        //TODO: consider the actions for incorrect planar char
+        return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
+    }
+
     # Scan the lexeme for URI characters
     #
     # + return - False to continue. True to terminate the token. An error on failure.
     private function scanURICharacter() returns boolean|LexicalError {
 
         // Check for URI characters
-        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], self.index)) {
+        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN])) {
             self.lexeme += <string>self.peek();
             return false;
         }
@@ -491,14 +577,14 @@ class Lexer {
         }
 
         //  
-        if (self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, self.index) && self.charCounter > 1 && self.charCounter < 4) {
+        if (self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN) && self.charCounter > 1 && self.charCounter < 4) {
             self.lexeme += <string>self.peek();
             self.charCounter += 1;
             return false;
         }
 
         // Ignore the comments
-        if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN], self.index) {
+        if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
             return false;
         }
 
@@ -511,7 +597,7 @@ class Lexer {
     private function scanTagHandle() returns boolean|LexicalError {
 
         // Scan the word of the name tag.
-        if (self.matchRegexPattern(WORD_PATTERN, self.index)) {
+        if (self.matchRegexPattern(WORD_PATTERN)) {
             self.lexeme += <string>self.peek();
             return false;
         }
@@ -528,7 +614,7 @@ class Lexer {
     #
     # + return - False to continue. True to terminate the token. An error on failure.
     private function scanAnchorName() returns boolean|LexicalError {
-        if (self.matchRegexPattern([PRINTABLE_PATTERN], self.index, [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
+        if (self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
             self.lexeme += <string>self.peek();
             return false;
         }
@@ -539,7 +625,7 @@ class Lexer {
     #
     # + return - False to continue. True to terminate the token.
     private function scanWhitespace() returns boolean {
-        if (self.peek() == " ") {
+        if self.peek() == " " {
             self.lexeme += " ";
             return false;
         }
@@ -551,7 +637,7 @@ class Lexer {
     # + return - Generates a function which checks the lexemes for the given number system.  
     private function scanDigit(string digitPattern) returns function () returns boolean|LexicalError {
         return function() returns boolean|LexicalError {
-            if (self.matchRegexPattern(digitPattern, self.index)) {
+            if (self.matchRegexPattern(digitPattern)) {
                 self.lexeme += <string>self.peek();
                 return false;
             }
@@ -610,7 +696,7 @@ class Lexer {
     # + index - Index of the character. Default = self.index  
     # + exclusionPatterns - Exclude the regex patterns
     # + return - True if the pattern matches
-    private function matchRegexPattern(string|string[] inclusionPatterns, int? index = (), string|string[]? exclusionPatterns = ()) returns boolean {
+    private function matchRegexPattern(string|string[] inclusionPatterns, string|string[]? exclusionPatterns = (), int? index = ()) returns boolean {
         string inclusionPattern = "[" + self.concatenateStringArray(inclusionPatterns) + "]";
         string exclusionPattern = "";
 
@@ -642,8 +728,9 @@ class Lexer {
     # + return - If success, returns the token. Else, returns the parsing error.  
     private function tokensInSequence(string chars, YAMLToken successToken) returns Token|LexicalError {
         foreach string char in chars {
-            if (!self.checkCharacter(char)) {
-                return self.generateError(self.formatErrorMessage(successToken));
+            // The expected character is not found
+            if (self.peek() == () || !self.checkCharacter(char)) {
+                return self.generateError(string `Expected '${char}' for ${successToken}`);
             }
             self.forward();
         }

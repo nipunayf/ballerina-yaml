@@ -64,6 +64,12 @@ class Parser {
                         value
                     };
                 }
+                PLANAR_CHAR => {
+                    string value = check self.planarScalar();
+                    return {
+                        value
+                    };
+                }
             }
         }
         return self.generateError("EOF is reached. Cannot generate any more events");
@@ -100,6 +106,8 @@ class Parser {
     private function yamlDirective() returns LexicalError|ParsingError|() {
         // Expect a separate in line.
         check self.checkToken(SEPARATION_IN_LINE);
+
+        self.lexer.state = LEXER_DIRECTIVE;
 
         // Expect yaml version
         check self.checkToken(DECIMAL, true);
@@ -164,7 +172,7 @@ class Parser {
                 EMPTY_LINE => {
                     if isFirstLine { // Whitespace is preserved on the first line
                         lexemeBuffer += self.currentToken.value;
-                    isFirstLine = false;
+                        isFirstLine = false;
                     } else if escaped { // Whitespace is preserved when escaped
                         lexemeBuffer += self.currentToken.value + "\n";
                     } else { // Whitespace is ignored when line folding
@@ -234,6 +242,45 @@ class Parser {
             check self.checkToken();
         }
 
+        return lexemeBuffer;
+    }
+
+    private function planarScalar() returns ParsingError|LexicalError|string {
+        // Process the first planar char
+        string lexemeBuffer = self.currentToken.value;
+        boolean emptyLine = false;
+
+        check self.checkToken();
+
+        // Iterate the content until an invalid token is found
+        while true {
+            match self.currentToken.token {
+                PLANAR_CHAR => {
+                    if emptyLine {
+                        emptyLine = false;
+                    } else { // Add a whitespace if there are no preceding empty lines
+                        lexemeBuffer += " ";
+                    }
+                    lexemeBuffer += self.currentToken.value;
+                }
+                EOL => {
+                    // Terminate at the end of the line
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer("");
+                }
+                EMPTY_LINE => {
+                    lexemeBuffer += "\n";
+                    emptyLine = true;
+                }
+                SEPARATION_IN_LINE => {}
+                _ => { // Break the character when the token does not belong to planar scalar
+                    break;
+                }
+            }
+            check self.checkToken();
+        }
         return lexemeBuffer;
     }
 
