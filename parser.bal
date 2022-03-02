@@ -1,3 +1,12 @@
+enum Context {
+    BLOCK_IN,
+    BLOCK_OUT,
+    BLOCK_KEY,
+    FLOW_IN,
+    FLOW_OUT,
+    FLOW_KEY
+}
+
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -8,11 +17,18 @@ class Parser {
     # Current token
     private Token currentToken = {token: DUMMY};
 
+    # Used to store the token after peeked.
+    # Used later when the checkToken method is invoked.
+    private Token tokenBuffer = {token: DUMMY};
+
     # Hold the lexemes until the final value is generated
     private string lexemeBuffer = "";
 
     # Lexical analyzer tool for getting the tokens
     private Lexer lexer = new Lexer();
+
+    # Represents the current context of the parser
+    private Context context = BLOCK_OUT;
 
     map<string> tagHandles = {};
 
@@ -186,7 +202,6 @@ class Parser {
                     return self.generateError(string `Invalid character '${self.currentToken.token}' inside the double quote`);
                 }
             }
-
             check self.checkToken();
         }
 
@@ -274,7 +289,8 @@ class Parser {
                     lexemeBuffer += "\n";
                     emptyLine = true;
                 }
-                SEPARATION_IN_LINE => {}
+                SEPARATION_IN_LINE => {
+                }
                 _ => { // Break the character when the token does not belong to planar scalar
                     break;
                 }
@@ -283,6 +299,24 @@ class Parser {
         }
         return lexemeBuffer;
     }
+
+    // private function separate() returns boolean {
+    //     check self.checkToken();
+
+    //     // Only separation in line is considered for keys
+    //     if self.context == BLOCK_KEY || self.context == FLOW_KEY {
+    //         return self.currentToken.token == SEPARATION_IN_LINE;
+    //     }
+
+    //     // For the rest of the contexts, check either separation in line or comment lines
+    //     if self.currentToken.token == SEPARATION_IN_LINE {
+
+    //     }
+
+    //     if self.currentToken.token == EOL {
+
+    //     }
+    // }
 
     # Find the first non-space character from tail.
     #
@@ -331,9 +365,24 @@ class Parser {
     # + customMessage - Error message to be displayed if the expected token not found  
     # + addToLexeme - If set, add the value of the token to lexemeBuffer.
     # + return - Parsing error if not found
-    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "") returns (LexicalError|ParsingError)? {
+    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
         YAMLToken prevToken = self.currentToken.token;
-        self.currentToken = check self.lexer.getToken();
+        Token token;
+
+        // Obtain a token form the lexer if there is none in the buffer.
+        if self.tokenBuffer.token == DUMMY {
+            token = check self.lexer.getToken();
+        } else {
+            token = self.tokenBuffer;
+            self.tokenBuffer = {token: DUMMY};
+        }
+
+        // Add the token to the tokenBuffer if the peek flag is set.
+        if peek {
+            self.tokenBuffer = token;
+        } else {
+            self.currentToken = token;
+        }
 
         // Bypass error handling.
         if (expectedTokens == DUMMY) {
@@ -347,11 +396,11 @@ class Parser {
 
         // Generate an error if the expected token differ from the actual token.
         if (expectedTokens is YAMLToken) {
-            if (self.currentToken.token != expectedTokens) {
+            if (token.token != expectedTokens) {
                 return self.generateError(errorMessage);
             }
         } else {
-            if (expectedTokens.indexOf(self.currentToken.token) == ()) {
+            if (expectedTokens.indexOf(token.token) == ()) {
                 return self.generateError(errorMessage);
             }
         }
