@@ -53,7 +53,7 @@ function invalidDirectiveDataGen() returns map<[string]> {
     dataProvider: validTagDataGen
 }
 function testValidTagHandlers(string tag, string lexeme) returns error? {
-    Lexer lexer = setLexerString(tag, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(tag, LEXER_TAG_HANDLE);
     check assertToken(lexer, TAG_HANDLE, lexeme = lexeme);
 }
 

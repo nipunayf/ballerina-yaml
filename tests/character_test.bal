@@ -63,3 +63,18 @@ function lineFoldingDataGen() returns map<[string[], string]> {
         "space-empty": [["\"", "space\""], " space"]
     };
 }
+
+@test:Config {
+    dataProvider: separateDataGen
+}
+function testSeparateEvent(string[] arr, string value) returns error? {
+    check assertParsingEvent(arr, value, "!tag", "anchor");
+}
+
+function separateDataGen() returns map<[string[], string]> {
+    return {
+        "single space": [["!tag &anchor value"], "value"],
+        "new line": [["!tag", "&anchor value"], "value"],
+        "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"]]
+    };
+}

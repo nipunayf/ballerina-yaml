@@ -19,6 +19,7 @@ enum RegexPattern {
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
+    LEXER_TAG_HANDLE,
     LEXER_TAG_PREFIX,
     LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
@@ -85,11 +86,14 @@ class Lexer {
             LEXER_START => {
                 return check self.stateStart();
             }
+            LEXER_TAG_HANDLE => {
+                return check self.stateTagHandle();
+            }
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
             }
             LEXER_DIRECTIVE => {
-                return check self.stateDirective();
+                return check self.stateYamlDirective();
             }
             LEXER_DOCUMENT_OUT => {
                 return check self.stateDocumentOut();
@@ -163,7 +167,7 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("single quote flow style"));
     }
 
-    private function stateDirective() returns Token|LexicalError {
+    private function stateYamlDirective() returns Token|LexicalError {
         // Check for decimal digits
         if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
             return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
@@ -228,25 +232,7 @@ class Lexer {
                 }
             }
             "!" => {
-                match self.peek(1) {
-                    " "|"\t" => { // Primary tag handle
-                        self.lexeme = "!";
-                        return self.generateToken(TAG_HANDLE);
-                    }
-                    "!" => { // Secondary tag handle
-                        self.lexeme = "!!";
-                        self.forward();
-                        return self.generateToken(TAG_HANDLE);
-                    }
-                    () => {
-                        return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
-                    }
-                    _ => { // Check for named tag handles
-                        self.lexeme = "!";
-                        self.forward();
-                        return self.iterate(self.scanTagHandle, TAG_HANDLE, true);
-                    }
-                }
+
             }
             ":" => {
                 self.lexeme += ":";
@@ -277,7 +263,39 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("document prefix"));
     }
 
-    # Perform scanning for tag prefixes
+    private function stateTagHandle() returns Token|LexicalError {
+        // Check fo primary, secondary, and named tag handles
+        if self.peek() == "!" {
+            match self.peek(1) {
+                " "|"\t" => { // Primary tag handle
+                    self.lexeme = "!";
+                    return self.generateToken(TAG_HANDLE);
+                }
+                "!" => { // Secondary tag handle
+                    self.lexeme = "!!";
+                    self.forward();
+                    return self.generateToken(TAG_HANDLE);
+                }
+                () => {
+                    return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
+                }
+                _ => { // Check for named tag handles
+                    self.lexeme = "!";
+                    self.forward();
+                    return self.iterate(self.scanTagHandle, TAG_HANDLE, true);
+                }
+            }
+        }
+
+        // Check for separation-in-space before the tag prefix
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+        }
+
+        return self.generateError("Expected '!' to start the tag handle");
+    }
+
+    # Perform scanning for tag prefixes.
     #
     # + return - The respective token on success. Else, an error.
     private function stateTagPrefix() returns Token|LexicalError {

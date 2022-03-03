@@ -100,6 +100,7 @@ class Parser {
         check self.checkToken(SEPARATION_IN_LINE);
 
         // Expect a tag handle
+        self.lexer.state = LEXER_TAG_HANDLE;
         check self.checkToken(TAG_HANDLE);
         string tagHandle = self.currentToken.value;
         check self.checkToken(SEPARATION_IN_LINE);
@@ -300,7 +301,7 @@ class Parser {
         return lexemeBuffer;
     }
 
-    // private function separate() returns boolean {
+    // private function separate() returns boolean|LexicalError|ParsingError {
     //     check self.checkToken();
 
     //     // Only separation in line is considered for keys
@@ -310,7 +311,6 @@ class Parser {
 
     //     // For the rest of the contexts, check either separation in line or comment lines
     //     if self.currentToken.token == SEPARATION_IN_LINE {
-
     //     }
 
     //     if self.currentToken.token == EOL {
