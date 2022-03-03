@@ -75,9 +75,11 @@ function testTagPrefixTokens(string lexeme, string value) returns error? {
 
 function tagPrefixDataGen() returns map<[string, string]> {
     return {
-        "local tag prefix": ["!local- ", "!local-"],
-        "global tag prefix": ["tag:example.com,2000:app/  ", "tag:example.com,2000:app/"],
-        "global tag prefix with hex": ["%abglobal  ", "%abglobal"]
+        "local-tag-prefix": ["!local- ", "!local-"],
+        "global-tag-prefix": ["tag:example.com,2000:app/  ", "tag:example.com,2000:app/"],
+        "global-tag-prefix starting hex": ["%21global  ", "!global"],
+        "global-tag-prefix inline hex": ["global%21hex  ", "global!hex"],
+        "global-tag-prefix single-hex": ["%21  ", "!"]
     };
 }
 

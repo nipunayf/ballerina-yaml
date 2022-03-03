@@ -55,11 +55,11 @@ class Parser {
                 DIRECTIVE => {
                     if (self.currentToken.value == "YAML") { // YAML directive
                         check self.yamlDirective();
-                        check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
+                        check self.checkToken([SEPARATION_IN_LINE, EOL]);
                     }
                     else { // TAG directive
                         check self.tagDirective();
-                        check self.checkToken([LINE_BREAK, SEPARATION_IN_LINE, EOL]);
+                        check self.checkToken([SEPARATION_IN_LINE, EOL]);
                     }
                 }
                 DIRECTIVE_MARKER => {

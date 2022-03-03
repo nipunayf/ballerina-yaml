@@ -64,17 +64,53 @@ function lineFoldingDataGen() returns map<[string[], string]> {
     };
 }
 
-@test:Config {
-    dataProvider: separateDataGen
-}
-function testSeparateEvent(string[] arr, string value) returns error? {
-    check assertParsingEvent(arr, value, "!tag", "anchor");
-}
+// @test:Config {
+//     dataProvider: separateDataGen
+// }
+// function testSeparateEvent(string[] arr, string value) returns error? {
+//     check assertParsingEvent(arr, value, "!tag", "anchor");
+// }
 
-function separateDataGen() returns map<[string[], string]> {
-    return {
-        "single space": [["!tag &anchor value"], "value"],
-        "new line": [["!tag", "&anchor value"], "value"],
-        "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"]]
-    };
-}
+// function separateDataGen() returns map<[string[], string]> {
+//     return {
+//         "single space": [["!tag &anchor value"], "value"],
+//         "new line": [["!tag", "&anchor value"], "value"],
+//         "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"]]
+//     };
+// }
+
+// @test:Config {
+//     dataProvider: nodeTagDataGen
+// }
+// function testNodeTagToken(string line, string value) returns error? {
+//     Lexer lexer = setLexerString(line);
+//     check assertToken(lexer, TAG, lexeme = value);
+// }
+
+// function nodeTagDataGen() returns map<[string, string]> {
+//     return {
+//         "verbatim global": ["!<tag:yaml.org,2002:str>", "tag:yaml.org,2002:str"],
+//         "verbatim local": ["!<!bar>", "!bar"],
+//         "tag-shorthand primary": ["!local", "!local"],
+//         "tag-shorthand secondary": ["!!str", "!!str"],
+//         "tag-shorthand named": ["!e!tag", "!e!tag"],
+//         "tag-shorthand escaped": ["!e!tag%21", "!e!tag!"],
+//         "non-specific tag": ["!", "!"]
+//     };
+// }
+
+// @test:Config {
+//     dataProvider: invalidNodeTagDataGen
+// }
+// function testInvalidNodeTagToken(string line) returns error? {
+//     assertLexicalError(line);
+// }
+
+// function invalidNodeTagDataGen() returns map<[string]> {
+//     return {
+//         "verbatim primary": ["!<!>"],
+//         "verbatim invalid": ["!<$:?>"],
+//         "tag-shorthand no-suffix": ["!e!"]
+
+//     };
+// }

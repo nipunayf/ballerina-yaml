@@ -22,6 +22,7 @@ enum YAMLToken {
     ANCHOR = "&",
     TAG_HANDLE = "<tag-handle>",
     TAG_PREFIX = "<tag-prefix>",
+    TAG = "<tag>",
     DOT = ".",
     SCALAR = "<scalar>",
     LITERAL,

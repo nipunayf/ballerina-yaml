@@ -231,9 +231,13 @@ class Lexer {
                     }
                 }
             }
-            "!" => {
+            "!" => { // Node tags
+                match self.peek(1) {
+                    "<" => { // Verbatim tag
 
-            }
+                    }
+                }
+            }   
             ":" => {
                 self.lexeme += ":";
                 self.forward();
@@ -309,22 +313,15 @@ class Lexer {
         }
 
         // Match the global prefix with hexadecimal value
-        if (self.peek() == "%") {
-            self.lexeme += "%";
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            self.forward();
+            return self.iterate(self.scanURICharacter, TAG_PREFIX);
+        }
 
-            // Match the first digit of the tag char
-            if (self.peek(1) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 1)) {
-                self.lexeme += self.line[self.index + 1];
-
-                // Match the second digit of the tag char
-                if (self.peek(2) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 2)) {
-                    self.lexeme += self.line[self.index + 2];
-                    self.forward(3);
-
-                    // Check for URI characters
-                    return self.iterate(self.scanURICharacter, TAG_PREFIX);
-                }
-            }
+        // Check for tail separation-in-line
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
         }
 
         return self.generateError(self.formatErrorMessage(TAG_PREFIX));
@@ -437,7 +434,7 @@ class Lexer {
 
     # Process the hex codes under the unicode escaped character.
     #
-    # + escapedChar - Escaped character before the digits  
+    # + escapedChar - Escaped character before the digits. Only used to present in the error message.
     # + length - Number of digits
     # + return - An error on failure
     private function scanUnicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
@@ -584,26 +581,15 @@ class Lexer {
             return false;
         }
 
-        // Check for hexadecimal values
+        // Process the hexadecimal values after '%'
         if self.peek() == "%" {
-            if (self.charCounter > 1 && self.charCounter < 4) {
-                return self.generateError("Must have 2 digits for a hexadecimal in URI");
-            }
-            self.lexeme += "%";
-            self.charCounter += 1;
+            check self.scanUnicodeEscapedCharacters("%", 2);
             return false;
         }
-
-        //  
-        if (self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN) && self.charCounter > 1 && self.charCounter < 4) {
-            self.lexeme += <string>self.peek();
-            self.charCounter += 1;
-            return false;
-        }
-
+        
         // Ignore the comments
         if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
-            return false;
+            return true;
         }
 
         return self.generateError(self.formatErrorMessage(TAG_PREFIX));
@@ -649,6 +635,7 @@ class Lexer {
         }
         return true;
     }
+    
     # Check for the lexemes to crete an DECIMAL token.
     #
     # + digitPattern - Regex pattern of the number system
