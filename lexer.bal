@@ -234,10 +234,18 @@ class Lexer {
             "!" => { // Node tags
                 match self.peek(1) {
                     "<" => { // Verbatim tag
-
+                        self.forward(2);
+                        return self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], index = self.index + 1) ?
+                            self.iterate(self.scanURICharacter(true), TAG, true)
+                            : self.generateError(string `Expected a 'uri-char' after '<' in a 'verbatim tag'`);
+                    }
+                    " "|"\t"|() => { // Non-specific tag
+                        self.forward();
+                        self.lexeme = "!";
+                        return self.generateToken(TAG);
                     }
                 }
-            }   
+            }
             ":" => {
                 self.lexeme += ":";
                 self.forward();
@@ -309,14 +317,14 @@ class Lexer {
         || self.peek() == "!") {
             self.lexeme += <string>self.peek();
             self.forward();
-            return self.iterate(self.scanURICharacter, TAG_PREFIX);
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
         }
 
         // Match the global prefix with hexadecimal value
         if self.peek() == "%" {
             check self.scanUnicodeEscapedCharacters("%", 2);
             self.forward();
-            return self.iterate(self.scanURICharacter, TAG_PREFIX);
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
         }
 
         // Check for tail separation-in-line
@@ -573,26 +581,32 @@ class Lexer {
     # Scan the lexeme for URI characters
     #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function scanURICharacter() returns boolean|LexicalError {
+    private function scanURICharacter(boolean isVerbatim = false) returns function () returns boolean|LexicalError {
+        return function() returns boolean|LexicalError {
+            // Check for URI characters
+            if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN])) {
+                self.lexeme += <string>self.peek();
+                return false;
+            }
 
-        // Check for URI characters
-        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN])) {
-            self.lexeme += <string>self.peek();
-            return false;
-        }
+            // Process the hexadecimal values after '%'
+            if self.peek() == "%" {
+                check self.scanUnicodeEscapedCharacters("%", 2);
+                return false;
+            }
 
-        // Process the hexadecimal values after '%'
-        if self.peek() == "%" {
-            check self.scanUnicodeEscapedCharacters("%", 2);
-            return false;
-        }
-        
-        // Ignore the comments
-        if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
-            return true;
-        }
+            // Ignore the comments
+            if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
+                return true;
+            }
 
-        return self.generateError(self.formatErrorMessage(TAG_PREFIX));
+            // Terminate when '>' is detected for a verbatim tag
+            if isVerbatim && self.peek() == ">" {
+                return true;
+            }
+
+            return self.generateError(self.formatErrorMessage("URI character"));
+        };
     }
 
     # Description
@@ -635,7 +649,7 @@ class Lexer {
         }
         return true;
     }
-    
+
     # Check for the lexemes to crete an DECIMAL token.
     #
     # + digitPattern - Regex pattern of the number system

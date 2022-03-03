@@ -79,38 +79,66 @@ function lineFoldingDataGen() returns map<[string[], string]> {
 //     };
 // }
 
-// @test:Config {
-//     dataProvider: nodeTagDataGen
-// }
-// function testNodeTagToken(string line, string value) returns error? {
-//     Lexer lexer = setLexerString(line);
-//     check assertToken(lexer, TAG, lexeme = value);
-// }
+@test:Config {
+    dataProvider: nodeTagDataGen
+}
+function testNodeTagToken(string line, string value) returns error? {
+    Lexer lexer = setLexerString(line, LEXER_DOCUMENT_OUT);
+    check assertToken(lexer, TAG, lexeme = value);
+}
 
-// function nodeTagDataGen() returns map<[string, string]> {
-//     return {
-//         "verbatim global": ["!<tag:yaml.org,2002:str>", "tag:yaml.org,2002:str"],
-//         "verbatim local": ["!<!bar>", "!bar"],
-//         "tag-shorthand primary": ["!local", "!local"],
-//         "tag-shorthand secondary": ["!!str", "!!str"],
-//         "tag-shorthand named": ["!e!tag", "!e!tag"],
-//         "tag-shorthand escaped": ["!e!tag%21", "!e!tag!"],
-//         "non-specific tag": ["!", "!"]
-//     };
-// }
+function nodeTagDataGen() returns map<[string, string]> {
+    return {
+        "verbatim global": ["!<tag:yaml.org,2002:str>", "tag:yaml.org,2002:str"],
+        "verbatim local": ["!<!bar> ", "!bar"],
+        "non-specific tag": ["!", "!"]
+    };
+}
 
-// @test:Config {
-//     dataProvider: invalidNodeTagDataGen
-// }
-// function testInvalidNodeTagToken(string line) returns error? {
-//     assertLexicalError(line);
-// }
+@test:Config {
+    dataProvider: invalidNodeTagDataGen
+}
+function testInvalidNodeTagToken(string line) returns error? {
+    assertLexicalError(line);
+}
 
-// function invalidNodeTagDataGen() returns map<[string]> {
-//     return {
-//         "verbatim primary": ["!<!>"],
-//         "verbatim invalid": ["!<$:?>"],
-//         "tag-shorthand no-suffix": ["!e!"]
+function invalidNodeTagDataGen() returns map<[string]> {
+    return {
+        "verbatim primary": ["!<!>"],
+        "verbatim empty": ["!<>"],
+        "verbatim invalid": ["!<$:?>"],
+        "tag-shorthand no-suffix": ["!e!"]
+    };
+}
 
-//     };
-// }
+@test:Config {
+    dataProvider: tagShorthandDataGen
+}
+function testTagShorthandEvent(string line, string tagHandle, string tag) returns error? {
+    check assertParsingEvent(line, tagHandle = tagHandle, tag = tag);
+}
+
+function tagShorthandDataGen() returns map<[string, string, string]> {
+    return {
+        "primary": ["!local value", "!", "local"],
+        "secondary": ["!!str value", "!!", "str"],
+        "named": ["!e!tag value", "!e!", "tag"],
+        "escaped": ["!e!tag%21 value", "!e!", "tag!"],
+        "double!": ["!%21 value", "!", "!"]
+    };
+}
+
+
+@test:Config {
+    dataProvider: invalidTagShorthandDataGen
+}
+function testInvalidTagShorthandEvent(string line) returns error? {
+    assertParsingError(line);
+}
+
+function invalidTagShorthandDataGen() returns map<[string]> {
+    return {
+        "no suffix": ["!e! value"],
+        "terminating !": ["!e!tag! value"]
+    };
+}

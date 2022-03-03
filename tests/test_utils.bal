@@ -61,10 +61,13 @@ function getToken(Lexer lexer, int index) returns Token|error {
     return token;
 }
 
-function assertParsingEvent(string|string[] lines, string value, string tag = "", string anchor = "") returns error? {
+function assertParsingEvent(string|string[] lines, string value = "", string tag = "", string tagHandle = "", string anchor = "") returns error? {
     Parser parser = new Parser((lines is string) ? [lines] : lines);
     Event event = check parser.parse();
-    test:assertEquals((<ScalarEvent>event).value, value);
+
+    if value.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).value, value);
+    }
 
     if tag.length() > 0 {
         test:assertEquals((<ScalarEvent>event).tag, tag);
@@ -72,6 +75,10 @@ function assertParsingEvent(string|string[] lines, string value, string tag = ""
 
     if anchor.length() > 0 {
         test:assertEquals((<ScalarEvent>event).anchor, anchor);
+    }
+
+    if tagHandle.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).tagHandle, tagHandle);
     }
 }
 

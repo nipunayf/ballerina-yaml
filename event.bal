@@ -18,6 +18,7 @@ type DocumentStartEvent record {|
 type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
+    string? tagHandle  = ();
     // boolean implicit = true;
     // string style = ;
 |};
