@@ -21,6 +21,7 @@ enum State {
     LEXER_START,
     LEXER_TAG_HANDLE,
     LEXER_TAG_PREFIX,
+    LEXER_TAG_NODE,
     LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
@@ -45,8 +46,11 @@ class Lexer {
     # Indentation of the current line   
     int indent = 0;
 
-    # Incremented when the lexer needs to be aware of the char count.
-    private int charCounter = 0;
+    # Store the lexeme if it will be scanned again by the next token
+    string lexemeBuffer = "";
+
+    # Used to differentiate the tag handle between primary and named
+    private boolean isNamed = true;
 
     private map<string> escapedCharMap = {
         "0": "\u{00}",
@@ -91,6 +95,9 @@ class Lexer {
             }
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
+            }
+            LEXER_TAG_NODE => {
+                return check self.stateTagNode();
             }
             LEXER_DIRECTIVE => {
                 return check self.stateYamlDirective();
@@ -240,9 +247,21 @@ class Lexer {
                             : self.generateError(string `Expected a 'uri-char' after '<' in a 'verbatim tag'`);
                     }
                     " "|"\t"|() => { // Non-specific tag
-                        self.forward();
                         self.lexeme = "!";
+                        self.forward();
                         return self.generateToken(TAG);
+                    }
+                    "!" => { // Secondary tag handle 
+                        self.lexeme = "!!";
+                        self.forward();
+                        return self.generateToken(TAG_HANDLE);
+                    }
+                    _ => { // Check for primary and name tag handles
+                        self.lexeme = "!";
+                        self.forward();
+
+                        // Differentiate between primary and named tag
+                        return self.iterate(self.scanTagHandle(true), TAG_HANDLE, true);
                     }
                 }
             }
@@ -294,7 +313,7 @@ class Lexer {
                 _ => { // Check for named tag handles
                     self.lexeme = "!";
                     self.forward();
-                    return self.iterate(self.scanTagHandle, TAG_HANDLE, true);
+                    return self.iterate(self.scanTagHandle(), TAG_HANDLE, true);
                 }
             }
         }
@@ -312,11 +331,9 @@ class Lexer {
     # + return - The respective token on success. Else, an error.
     private function stateTagPrefix() returns Token|LexicalError {
 
-        // Match the global prefix with tag pattern or local tag prefix
-        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
-        || self.peek() == "!") {
-            self.lexeme += <string>self.peek();
-            self.forward();
+        // Match the global tag prefix or local tag prefix
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
+        || self.peek() == "!" {
             return self.iterate(self.scanURICharacter(), TAG_PREFIX);
         }
 
@@ -333,6 +350,28 @@ class Lexer {
         }
 
         return self.generateError(self.formatErrorMessage(TAG_PREFIX));
+    }
+
+    private function stateTagNode() returns Token|LexicalError {
+
+        // Match the tag with the tag character pattern
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN]) {
+            return self.iterate(self.scanTagCharacter, TAG);
+        }
+
+        // Match the global prefix with hexadecimal value
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            self.forward();
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
+        }
+
+        // Check for tail separation-in-line
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+        }
+
+        return self.generateError(self.formatErrorMessage(TAG));
     }
 
     private function stateStart() returns Token|LexicalError {
@@ -578,6 +617,29 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
     }
 
+    # Scan the lexeme for tag characters.
+    #
+    # + return - False to continue. True to terminate the token. An error on failure.
+    private function scanTagCharacter() returns boolean|LexicalError {
+        // Check for URI character
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
+            self.lexeme += <string>self.peek();
+            return false;
+        }
+
+        if self.matchRegexPattern(WHITESPACE_PATTERN) {
+            return true;
+        }
+
+        // Process the hexadecimal values after '%'
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            return false;
+        }
+
+        return self.generateError(self.formatErrorMessage(TAG));
+    }
+
     # Scan the lexeme for URI characters
     #
     # + return - False to continue. True to terminate the token. An error on failure.
@@ -609,23 +671,38 @@ class Lexer {
         };
     }
 
-    # Description
+    # Scan the lexeme for named tag handle.
     #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function scanTagHandle() returns boolean|LexicalError {
+    private function scanTagHandle(boolean differentiate = false) returns function () returns boolean|LexicalError {
+        return function() returns boolean|LexicalError {
+            // Scan the word of the name tag.
+            if (self.matchRegexPattern(WORD_PATTERN)) {
+                self.lexeme += <string>self.peek();
+                return false;
+            }
 
-        // Scan the word of the name tag.
-        if (self.matchRegexPattern(WORD_PATTERN)) {
-            self.lexeme += <string>self.peek();
-            return false;
-        }
+            // Scan the end delimiter of the tag.
+            if self.peek() == "!" {
+                self.lexeme += "!";
+                return true;
+            }
 
-        // Scan the end delimiter of the tag.
-        if self.peek() == "!" {
-            self.lexeme += "!";
-            return true;
-        }
-        return self.generateError(self.formatErrorMessage(TAG_HANDLE));
+            // If the tag handle contains non-word character before '!', 
+            // Then the tag is primary
+            if differentiate && self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], FLOW_INDICATOR_PATTERN) {
+                self.lexemeBuffer = self.lexeme + <string>self.peek();
+                self.lexeme = "!";
+                return true;
+            }
+
+            if differentiate && self.peek() == "%" {
+                check self.scanUnicodeEscapedCharacters("%", 2);
+                return true;
+            }
+
+            return self.generateError(self.formatErrorMessage(TAG_HANDLE));
+        };
     }
 
     # Scan the lexeme for the anchor name.

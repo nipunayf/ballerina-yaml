@@ -86,6 +86,43 @@ class Parser {
                         value
                     };
                 }
+                TAG_HANDLE => {
+                    string tagHandle = self.currentToken.value;
+
+                    self.lexer.state = LEXER_TAG_NODE;
+                    check self.checkToken(TAG);
+                    string tag = self.currentToken.value;
+
+                    //TODO: process anchor nodes
+
+                    check self.checkToken(SEPARATION_IN_LINE);
+                    check self.checkToken();
+                    string value = self.currentToken.value;
+
+                    //TODO: check for either flow nodes or block nodes
+
+                    return {
+                        tagHandle,
+                        tag,
+                        value
+                    };
+                }
+                TAG => {
+                    string tag = self.currentToken.value;
+
+                    //TODO: process anchor nodes
+
+                    check self.checkToken(SEPARATION_IN_LINE);
+                    check self.checkToken();
+                    string value = self.currentToken.value;
+
+                    //TODO: check for either flow nodes or block nodes
+
+                    return {
+                        tag,
+                        value
+                    };
+                }
             }
         }
         return self.generateError("EOF is reached. Cannot generate any more events");
