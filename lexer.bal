@@ -353,8 +353,26 @@ class Lexer {
     }
 
     private function stateTagNode() returns Token|LexicalError {
+        // Check the lexeme buffer for the lexeme stored by the primary tag
+        if self.lexemeBuffer.length() > 0 {
+            self.lexeme = self.lexemeBuffer;
+            self.lexemeBuffer = "";
 
-        // Match the tag with the tag character pattern
+            // The complete primary tag is stored in the buffer
+            if self.matchRegexPattern(WHITESPACE_PATTERN) {
+                self.forward(-1);
+                return self.generateToken(TAG);
+            }
+
+            // A first portion of the primary tag is stored in the buffer
+            if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
+                return self.iterate(self.scanTagCharacter, TAG);
+            }
+
+            return self.generateError(self.formatErrorMessage("primary tag"));
+        }
+
+        // Match the tag with the t ag character pattern
         if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN]) {
             return self.iterate(self.scanTagCharacter, TAG);
         }
@@ -642,7 +660,8 @@ class Lexer {
 
     # Scan the lexeme for URI characters
     #
-    # + return - False to continue. True to terminate the token. An error on failure.
+    # + isVerbatim - If set, terminates when ">" is detected.
+    # + return - Generates a function to scan the URI characters.
     private function scanURICharacter(boolean isVerbatim = false) returns function () returns boolean|LexicalError {
         return function() returns boolean|LexicalError {
             // Check for URI characters
@@ -673,7 +692,8 @@ class Lexer {
 
     # Scan the lexeme for named tag handle.
     #
-    # + return - False to continue. True to terminate the token. An error on failure.
+    # + differentiate - If set, the function handles to differentiate between named and primary tags.
+    # + return - Generates a function to scan the lexeme of a named or primary tag handle.
     private function scanTagHandle(boolean differentiate = false) returns function () returns boolean|LexicalError {
         return function() returns boolean|LexicalError {
             // Scan the word of the name tag.
@@ -691,13 +711,25 @@ class Lexer {
             // If the tag handle contains non-word character before '!', 
             // Then the tag is primary
             if differentiate && self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], FLOW_INDICATOR_PATTERN) {
-                self.lexemeBuffer = self.lexeme + <string>self.peek();
+                self.lexemeBuffer = self.lexeme.substring(1) + <string>self.peek();
                 self.lexeme = "!";
                 return true;
             }
 
+            // If the tag handle contains a hexadecimal escape,
+            // Then the tag is primary
             if differentiate && self.peek() == "%" {
                 check self.scanUnicodeEscapedCharacters("%", 2);
+                self.lexemeBuffer = self.lexeme.substring(1);
+                self.lexeme = "!";
+                return true;
+            }
+
+            // Store the complete primary tag if a white space is detected
+            if differentiate && self.matchRegexPattern(WHITESPACE_PATTERN) {
+                self.forward(-1);
+                self.lexemeBuffer = self.lexeme.substring(1);
+                self.lexeme = "!";
                 return true;
             }
 

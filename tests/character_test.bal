@@ -128,17 +128,16 @@ function tagShorthandDataGen() returns map<[string, string, string]> {
     };
 }
 
-
 @test:Config {
     dataProvider: invalidTagShorthandDataGen
 }
-function testInvalidTagShorthandEvent(string line) returns error? {
-    assertParsingError(line);
+function testInvalidTagShorthandEvent(string line, boolean isLexical) returns error? {
+    assertParsingError(line, isLexical);
 }
 
-function invalidTagShorthandDataGen() returns map<[string]> {
+function invalidTagShorthandDataGen() returns map<[string, boolean]> {
     return {
-        "no suffix": ["!e! value"],
-        "terminating !": ["!e!tag! value"]
+        "no suffix": ["!e! value", false],
+        "terminating !": ["!e!tag! value", true]
     };
 }
