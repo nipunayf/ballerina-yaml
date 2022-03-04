@@ -86,6 +86,10 @@ class Lexer {
             return self.generateToken(LINE_BREAK);
         }
 
+        if self.peek() == "#" {
+            return self.generateToken(EOL);
+        }
+
         match self.state {
             LEXER_START => {
                 return check self.stateStart();

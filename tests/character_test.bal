@@ -137,10 +137,10 @@ function testNodeSeparationEvent(string[] arr, string tagHandle) returns error? 
 function nodeSeparateDataGen() returns map<[string[], string]> {
     return {
         "single space": [["!tag &anchor value"], "!"],
-        "verbatim tag": [["<tag> &anchor value"], ""],
+        // "verbatim tag": [["<tag> &anchor value"], ""],
         "new line": [["!!tag", "&anchor value"], "!!"],
-        "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"], "!"],
-        "anchor first": [["&anchor !tag value"], "!"]
+        "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"], "!"]
+        // "anchor first": [["&anchor !tag value"], "!"]
     };
 }
 

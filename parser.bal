@@ -93,8 +93,7 @@ class Parser {
                     check self.checkToken(TAG);
                     string tag = self.currentToken.value;
 
-                    //TODO: process anchor nodes
-                    check self.checkToken(SEPARATION_IN_LINE);
+                    check self.separate(TAG);
 
                     check self.checkToken(peek = true);
                     string? anchor = ();
@@ -347,25 +346,27 @@ class Parser {
         return lexemeBuffer;
     }
 
-    private function separate() returns boolean|LexicalError|ParsingError {
+    private function separate(YAMLToken beforeToken) returns ()|LexicalError|ParsingError {
         check self.checkToken();
 
         // Only separation in line is considered for keys
         if self.context == BLOCK_KEY || self.context == FLOW_KEY {
-            return self.currentToken.token == SEPARATION_IN_LINE;
+            return self.currentToken.token == SEPARATION_IN_LINE ? ()
+                : self.generateError(check self.formatErrorMessage(2, SEPARATION_IN_LINE, beforeToken));
         }
 
         if self.currentToken.token == SEPARATION_IN_LINE {
             // Check for s-b comment
             check self.checkToken(peek = true);
             if self.tokenBuffer.token != EOL {
-                return true;
+                return;
             }
             check self.checkToken();
         }
 
         // For the rest of the contexts, check either separation in line or comment lines
         while self.currentToken.token == EOL {
+            check self.initLexer();
             check self.checkToken(peek = true);
 
             //TODO: account flow-line prefix
@@ -378,12 +379,12 @@ class Parser {
                     check self.checkToken(EOL);
                 }
                 _ => {
-                    return true;
+                    return;
                 }
             }
         }
 
-        return false;
+        return self.generateError(string `Invalid character ${self.currentToken.token} for a separate grammar`);
     }
 
     # Find the first non-space character from tail.
@@ -484,7 +485,7 @@ class Parser {
     # + message - Error message to display when if the initialization fails 
     # + incrementLine - Sets the next line to the lexer
     # + return - An error if it fails to initialize  
-    private function initLexer(string message, boolean incrementLine = true) returns ParsingError? {
+    private function initLexer(string message = "Unexpected end of stream", boolean incrementLine = true) returns ParsingError? {
         if (incrementLine) {
             self.lineIndex += 1;
         }
