@@ -371,6 +371,12 @@ class Lexer {
 
             return self.generateError(self.formatErrorMessage("primary tag"));
         }
+        
+        // Scan the anchor node
+        if self.peek() == "&" {
+            self.forward();
+            return self.iterate(self.scanAnchorName, ANCHOR);
+        }
 
         // Match the tag with the t ag character pattern
         if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN]) {
@@ -411,10 +417,6 @@ class Lexer {
         }
 
         match self.peek() {
-            "&" => {
-                self.forward();
-                return self.iterate(self.scanAnchorName, ANCHOR);
-            }
             "*" => {
                 self.forward();
                 return self.iterate(self.scanAnchorName, ALIAS);

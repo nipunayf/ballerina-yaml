@@ -94,16 +94,25 @@ class Parser {
                     string tag = self.currentToken.value;
 
                     //TODO: process anchor nodes
-
                     check self.checkToken(SEPARATION_IN_LINE);
-                    check self.checkToken();
-                    string value = self.currentToken.value;
 
+                    check self.checkToken(peek = true);
+                    string? anchor = ();
+                    if self.tokenBuffer.token == ANCHOR {
+                        check self.checkToken();
+                        anchor = self.currentToken.value;
+                        check self.checkToken(SEPARATION_IN_LINE);
+                    }
+
+                    self.lexer.state = LEXER_DOCUMENT_OUT;
+                    check self.checkToken();
                     //TODO: check for either flow nodes or block nodes
+                    string value = self.currentToken.value;
 
                     return {
                         tagHandle,
                         tag,
+                        anchor,
                         value
                     };
                 }
@@ -338,22 +347,44 @@ class Parser {
         return lexemeBuffer;
     }
 
-    // private function separate() returns boolean|LexicalError|ParsingError {
-    //     check self.checkToken();
+    private function separate() returns boolean|LexicalError|ParsingError {
+        check self.checkToken();
 
-    //     // Only separation in line is considered for keys
-    //     if self.context == BLOCK_KEY || self.context == FLOW_KEY {
-    //         return self.currentToken.token == SEPARATION_IN_LINE;
-    //     }
+        // Only separation in line is considered for keys
+        if self.context == BLOCK_KEY || self.context == FLOW_KEY {
+            return self.currentToken.token == SEPARATION_IN_LINE;
+        }
 
-    //     // For the rest of the contexts, check either separation in line or comment lines
-    //     if self.currentToken.token == SEPARATION_IN_LINE {
-    //     }
+        if self.currentToken.token == SEPARATION_IN_LINE {
+            // Check for s-b comment
+            check self.checkToken(peek = true);
+            if self.tokenBuffer.token != EOL {
+                return true;
+            }
+            check self.checkToken();
+        }
 
-    //     if self.currentToken.token == EOL {
+        // For the rest of the contexts, check either separation in line or comment lines
+        while self.currentToken.token == EOL {
+            check self.checkToken(peek = true);
 
-    //     }
-    // }
+            //TODO: account flow-line prefix
+            match self.tokenBuffer.token {
+                EOL => { // Check for multi-lines
+                    check self.checkToken();
+                }
+                SEPARATION_IN_LINE => { // Check for l-comment
+                    check self.checkToken();
+                    check self.checkToken(EOL);
+                }
+                _ => {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     # Find the first non-space character from tail.
     #
@@ -399,8 +430,9 @@ class Parser {
     # Hence, the error checking must be done explicitly.
     #
     # + expectedTokens - Predicted token or tokens  
+    # + addToLexeme - If set, add the value of the token to lexemeBuffer.  
     # + customMessage - Error message to be displayed if the expected token not found  
-    # + addToLexeme - If set, add the value of the token to lexemeBuffer.
+    # + peek - Stores the token in the buffer
     # + return - Parsing error if not found
     private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
         YAMLToken prevToken = self.currentToken.token;

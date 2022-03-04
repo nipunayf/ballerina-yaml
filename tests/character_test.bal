@@ -24,7 +24,7 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
 
 @test:Config {}
 function testAnchorToken() returns error? {
-    Lexer lexer = setLexerString("&anchor value");
+    Lexer lexer = setLexerString("&anchor value", LEXER_TAG_NODE);
     check assertToken(lexer, ANCHOR, lexeme = "anchor");
 }
 
@@ -63,21 +63,6 @@ function lineFoldingDataGen() returns map<[string[], string]> {
         "space-empty": [["\"", "space\""], " space"]
     };
 }
-
-// @test:Config {
-//     dataProvider: separateDataGen
-// }
-// function testSeparateEvent(string[] arr, string value) returns error? {
-//     check assertParsingEvent(arr, value, "!tag", "anchor");
-// }
-
-// function separateDataGen() returns map<[string[], string]> {
-//     return {
-//         "single space": [["!tag &anchor value"], "value"],
-//         "new line": [["!tag", "&anchor value"], "value"],
-//         "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"]]
-//     };
-// }
 
 @test:Config {
     dataProvider: nodeTagDataGen
@@ -141,3 +126,21 @@ function invalidTagShorthandDataGen() returns map<[string, boolean]> {
         "terminating !": ["!e!tag! value", true]
     };
 }
+
+@test:Config {
+    dataProvider: nodeSeparateDataGen
+}
+function testNodeSeparationEvent(string[] arr, string tagHandle) returns error? {
+    check assertParsingEvent(arr, "value", "tag", tagHandle, "anchor");
+}
+
+function nodeSeparateDataGen() returns map<[string[], string]> {
+    return {
+        "single space": [["!tag &anchor value"], "!"],
+        "verbatim tag": [["<tag> &anchor value"], ""],
+        "new line": [["!!tag", "&anchor value"], "!!"],
+        "with comment": [["!tag #first-comment", "#second-comment", "&anchor value"], "!"],
+        "anchor first": [["&anchor !tag value"], "!"]
+    };
+}
+
