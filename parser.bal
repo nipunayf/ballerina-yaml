@@ -117,17 +117,62 @@ class Parser {
                 }
                 TAG => {
                     string tag = self.currentToken.value;
+                    self.lexer.state = LEXER_TAG_NODE;
 
-                    //TODO: process anchor nodes
+                    check self.separate(TAG);
 
-                    check self.checkToken(SEPARATION_IN_LINE);
+                    check self.checkToken(peek = true);
+                    string? anchor = ();
+                    if self.tokenBuffer.token == ANCHOR {
+                        check self.checkToken();
+                        anchor = self.currentToken.value;
+                        check self.checkToken(SEPARATION_IN_LINE);
+                    }
+
+                    self.lexer.state = LEXER_DOCUMENT_OUT;
                     check self.checkToken();
-                    string value = self.currentToken.value;
-
                     //TODO: check for either flow nodes or block nodes
+                    string value = self.currentToken.value;
 
                     return {
                         tag,
+                        anchor,
+                        value
+                    };
+                }
+                ANCHOR => {
+                    string anchor = self.currentToken.value;
+                    check self.separate(ANCHOR);
+
+                    check self.checkToken(peek = true);
+                    string? tag = ();
+                    string? tagHandle = ();
+                    match self.tokenBuffer.token {
+                        TAG => {
+                            check self.checkToken();
+                            tag = self.currentToken.value;
+                            check self.checkToken(SEPARATION_IN_LINE);
+                        }
+                        TAG_HANDLE => {
+                            check self.checkToken();
+                            tagHandle = self.currentToken.value;
+                            
+                            self.lexer.state = LEXER_TAG_NODE;
+                            check self.checkToken(TAG);
+                            tag = self.currentToken.value;
+                            check self.checkToken(SEPARATION_IN_LINE);
+                        }
+                    }
+
+                    self.lexer.state = LEXER_DOCUMENT_OUT;
+                    check self.checkToken();
+                    //TODO: check for either flow nodes or block nodes
+                    string value = self.currentToken.value;
+
+                    return {
+                        tagHandle,
+                        tag,
+                        anchor,
                         value
                     };
                 }

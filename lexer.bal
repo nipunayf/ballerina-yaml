@@ -269,6 +269,10 @@ class Lexer {
                     }
                 }
             }
+            "&" => {
+                self.forward();
+                return self.iterate(self.scanAnchorName, ANCHOR);
+            }
             ":" => {
                 self.lexeme += ":";
                 self.forward();
@@ -375,7 +379,7 @@ class Lexer {
 
             return self.generateError(self.formatErrorMessage("primary tag"));
         }
-        
+
         // Scan the anchor node
         if self.peek() == "&" {
             self.forward();
