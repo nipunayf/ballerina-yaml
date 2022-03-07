@@ -144,3 +144,10 @@ function nodeSeparateDataGen() returns map<[string[], string]> {
     };
 }
 
+@test:Config {}
+function testAliasEvent() returns error? {
+    Parser parser = new Parser(["*anchor"]);
+    Event event = check parser.parse();
+
+    test:assertEquals((<AliasEvent>event).alias, "anchor");
+}

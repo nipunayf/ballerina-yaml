@@ -86,6 +86,12 @@ class Parser {
                         value
                     };
                 }
+                ALIAS => {
+                    string alias = self.currentToken.value;
+                    return {
+                        alias
+                    };
+                }
                 TAG_HANDLE => {
                     string tagHandle = self.currentToken.value;
 
@@ -156,7 +162,7 @@ class Parser {
                         TAG_HANDLE => {
                             check self.checkToken();
                             tagHandle = self.currentToken.value;
-                            
+
                             self.lexer.state = LEXER_TAG_NODE;
                             check self.checkToken(TAG);
                             tag = self.currentToken.value;

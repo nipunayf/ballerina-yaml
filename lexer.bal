@@ -228,6 +228,10 @@ class Lexer {
             "." => {
                 return self.tokensInSequence("...", DOCUMENT_MARKER);
             }
+            "*" => {
+                self.forward();
+                return self.iterate(self.scanAnchorName, ALIAS);
+            }
             "%" => { // Directive line
                 self.forward();
                 match self.peek() {

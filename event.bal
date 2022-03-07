@@ -2,7 +2,7 @@ type Event AliasEvent|StreamStartEvent|DocumentStartEvent|SequenceStartEvent|
     MappingStartEvent|ScalarEvent|EndEvent;
 
 type AliasEvent record {|
-    string anchor;
+    string alias;
 |};
 
 type StreamStartEvent record {|
