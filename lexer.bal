@@ -49,8 +49,9 @@ class Lexer {
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
 
-    # Used to differentiate the tag handle between primary and named
-    private boolean isNamed = true;
+    # Flag is enabled after a JSON key is detected.
+    # Used to generate mapping key even when it is possible to generate a planar scalar.
+    boolean isJsonKey = false;
 
     private map<string> escapedCharMap = {
         "0": "\u{00}",
@@ -279,7 +280,7 @@ class Lexer {
             }
             ":" => {
                 self.lexeme += ":";
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }

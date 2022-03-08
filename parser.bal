@@ -86,35 +86,43 @@ class Parser {
             }
             DIRECTIVE_MARKER => {
                 return {
-                        docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
-                        tags: self.tagHandles
-                    };
+                    docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
+                    tags: self.tagHandles
+                };
             }
             DOUBLE_QUOTE_DELIMITER => {
                 string value = check self.doubleQuoteScalar();
+                self.lexer.isJsonKey = true;
+                boolean isKey = check self.isNodeKey("double-quoted scalar");
+                self.lexer.isJsonKey = false;
                 return {
-                        value
-                    };
+                    value,
+                    isKey
+                };
             }
             SINGLE_QUOTE_DELIMITER => {
                 string value = check self.singleQuoteScalar();
+                self.lexer.isJsonKey = true;
+                boolean isKey = check self.isNodeKey("single-quoted scalar");
+                self.lexer.isJsonKey = false;
                 return {
-                        value
-                    };
+                    value,
+                    isKey
+                };
             }
             PLANAR_CHAR => {
                 string value = check self.planarScalar();
                 boolean isKey = check self.isNodeKey("planar scalar");
                 return {
-                        value,
-                        isKey
-                    };
+                    value,
+                    isKey
+                };
             }
             ALIAS => {
                 string alias = self.currentToken.value;
                 return {
-                        alias
-                    };
+                    alias
+                };
             }
             TAG_HANDLE => {
                 string tagHandle = self.currentToken.value;
@@ -142,12 +150,12 @@ class Parser {
                 boolean isKey = check self.isNodeKey(ANCHOR);
 
                 return {
-                        tagHandle,
-                        tag,
-                        anchor,
-                        value,
-                        isKey
-                    };
+                    tagHandle,
+                    tag,
+                    anchor,
+                    value,
+                    isKey
+                };
             }
             TAG => {
                 // Obtain the tag name
@@ -171,11 +179,11 @@ class Parser {
                 boolean isKey = check self.isNodeKey(ANCHOR);
 
                 return {
-                        tag,
-                        anchor,
-                        value,
-                        isKey
-                    };
+                    tag,
+                    anchor,
+                    value,
+                    isKey
+                };
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -211,12 +219,12 @@ class Parser {
                 boolean isKey = check self.isNodeKey(TAG);
 
                 return {
-                        tagHandle,
-                        tag,
-                        anchor,
-                        value,
-                        isKey
-                    };
+                    tagHandle,
+                    tag,
+                    anchor,
+                    value,
+                    isKey
+                };
             }
             MAPPING_KEY => { // Empty node as the key
                 check self.separate(MAPPING_KEY);
@@ -541,7 +549,7 @@ class Parser {
         check self.checkToken(peek = true);
         if self.tokenBuffer.token == MAPPING_KEY {
             check self.checkToken();
-            check self.separate(MAPPING_KEY);
+            check self.separate(MAPPING_KEY, self.lexer.isJsonKey);
             self.expectEmptyNode = true;
             return true;
         }
