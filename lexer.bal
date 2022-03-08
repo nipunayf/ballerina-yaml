@@ -142,7 +142,7 @@ class Lexer {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
         }
 
-        return self.generateError(self.formatErrorMessage("double quotes flow style"));
+        return self.generateError(self.formatErrorMessage("double-quoted flow style"));
     }
 
     private function stateSingleQuote() returns Token|LexicalError {
@@ -175,7 +175,7 @@ class Lexer {
             return self.iterate(self.scanSingleQuotedChar, SINGLE_QUOTE_CHAR);
         }
 
-        return self.generateError(self.formatErrorMessage("single quote flow style"));
+        return self.generateError(self.formatErrorMessage("single-quoted flow style"));
     }
 
     private function stateYamlDirective() returns Token|LexicalError {
@@ -279,10 +279,11 @@ class Lexer {
             }
             ":" => {
                 self.lexeme += ":";
-                self.forward();
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                    self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
+                return self.generateToken(MAPPING_KEY);
             }
             "?" => {
                 self.lexeme += "?";
@@ -608,7 +609,7 @@ class Lexer {
             self.forward();
         }
 
-        // Check if EOL is reached
+        // Step back from the white spaces if EOL or ':' is reached 
         if self.peek() == () {
             self.forward(-numWhitespace);
             return true;
@@ -624,6 +625,7 @@ class Lexer {
         // Check for comments with a space before it
         if self.peek() == "#" {
             if self.peek(-1) == " " {
+                self.forward(-numWhitespace);
                 return true;
             }
             self.lexeme += whitespace + "#";
@@ -632,7 +634,8 @@ class Lexer {
 
         // Check for mapping value with a space after it 
         if self.peek() == ":" {
-            if self.peek() == " " {
+            if self.peek(1) == " " {
+                self.forward(-numWhitespace);
                 return true;
             }
             self.lexeme += whitespace + ":";

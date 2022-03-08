@@ -30,161 +30,203 @@ class Parser {
     # Represents the current context of the parser
     private Context context = BLOCK_OUT;
 
+    # Flag is set if an empty node is possible to expect
+    private boolean expectEmptyNode = false;
+
     map<string> tagHandles = {};
 
     # YAML version of the document.
     string? yamlVersion = ();
 
-    function init(string[] lines) {
+    function init(string[] lines) returns ParsingError? {
         self.lines = lines;
         self.numLines = lines.length();
+        check self.initLexer();
     }
 
     # Parse the initialized array of strings
     #
     # + return - Lexical or parsing error on failure
     public function parse() returns Event|LexicalError|ParsingError {
+        self.lexer.state = LEXER_DOCUMENT_OUT;
+        check self.checkToken();
 
-        // Iterating each line of the document.
-        while self.lineIndex < self.numLines - 1 {
-            check self.initLexer("Cannot open the YAML document");
-            self.lexer.state = LEXER_DOCUMENT_OUT;
+        // Ignore the whitespace at the head
+        if self.currentToken.token == SEPARATION_IN_LINE {
             check self.checkToken();
+        }
 
-            match self.currentToken.token {
-                DIRECTIVE => {
-                    if (self.currentToken.value == "YAML") { // YAML directive
-                        check self.yamlDirective();
-                        check self.checkToken([SEPARATION_IN_LINE, EOL]);
-                    }
-                    else { // TAG directive
-                        check self.tagDirective();
-                        check self.checkToken([SEPARATION_IN_LINE, EOL]);
-                    }
-                }
-                DIRECTIVE_MARKER => {
+        match self.currentToken.token {
+            EOL => {
+                if self.expectEmptyNode {
+                    self.expectEmptyNode = false;
                     return {
+                        value: ()
+                    };
+                }
+
+                check self.initLexer();
+                check self.checkToken(peek = true);
+
+                while self.tokenBuffer.token == EOL {
+                    check self.initLexer();
+                    check self.checkToken(peek = true);
+                }
+            }
+            DIRECTIVE => {
+                if (self.currentToken.value == "YAML") { // YAML directive
+                    check self.yamlDirective();
+                    check self.checkToken([SEPARATION_IN_LINE, EOL]);
+                } else { // TAG directive
+                    check self.tagDirective();
+                    check self.checkToken([SEPARATION_IN_LINE, EOL]);
+                }
+                check self.initLexer();
+                return check self.parse();
+            }
+            DIRECTIVE_MARKER => {
+                return {
                         docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
                         tags: self.tagHandles
                     };
-                }
-                DOUBLE_QUOTE_DELIMITER => {
-                    string value = check self.doubleQuoteScalar();
-                    return {
+            }
+            DOUBLE_QUOTE_DELIMITER => {
+                string value = check self.doubleQuoteScalar();
+                return {
                         value
                     };
-                }
-                SINGLE_QUOTE_DELIMITER => {
-                    string value = check self.singleQuoteScalar();
-                    return {
+            }
+            SINGLE_QUOTE_DELIMITER => {
+                string value = check self.singleQuoteScalar();
+                return {
                         value
                     };
-                }
-                PLANAR_CHAR => {
-                    string value = check self.planarScalar();
-                    return {
-                        value
+            }
+            PLANAR_CHAR => {
+                string value = check self.planarScalar();
+                boolean isKey = check self.isNodeKey("planar scalar");
+                return {
+                        value,
+                        isKey
                     };
-                }
-                ALIAS => {
-                    string alias = self.currentToken.value;
-                    return {
+            }
+            ALIAS => {
+                string alias = self.currentToken.value;
+                return {
                         alias
                     };
-                }
-                TAG_HANDLE => {
-                    string tagHandle = self.currentToken.value;
+            }
+            TAG_HANDLE => {
+                string tagHandle = self.currentToken.value;
 
-                    // Obtain the tag associated with the tag handle
-                    self.lexer.state = LEXER_TAG_NODE;
-                    check self.checkToken(TAG);
-                    string tag = self.currentToken.value;
+                // Obtain the tag associated with the tag handle
+                self.lexer.state = LEXER_TAG_NODE;
+                check self.checkToken(TAG);
+                string tag = self.currentToken.value;
 
-                    // Check if there is a separate 
-                    check self.separate(TAG);
-                    
-                    // Obtain the anchor value if there exists
-                    string? anchor = ();
-                    if self.tokenBuffer.token == ANCHOR {
-                        check self.checkToken();
-                        anchor = self.currentToken.value;
-                        check self.separate(ANCHOR);
-                    }
+                // Check if there is a separate 
+                check self.separate(TAG);
 
-                    // Obtain the flow node
-                    string value = check self.content(ANCHOR);
-
-                    return {
-                        tagHandle,
-                        tag,
-                        anchor,
-                        value
-                    };
-                }
-                TAG => {
-                    // Obtain the tag name
-                    string tag = self.currentToken.value;
-
-                    // Check fi there is a separate
-                    check self.separate(TAG);
-
-                    // Obtain the anchor if there exists
-                    string? anchor = ();
-                    if self.tokenBuffer.token == ANCHOR {
-                        check self.checkToken();
-                        anchor = self.currentToken.value;
-                        check self.separate(ANCHOR);
-                    }
-
-                    // Obtain the flow node vale
-                    string value = check self.content(ANCHOR);
-
-                    return {
-                        tag,
-                        anchor,
-                        value
-                    };
-                }
-                ANCHOR => {
-                    // Obtain the anchor name
-                    string anchor = self.currentToken.value;
-
-                    // Check if there is a separate
+                // Obtain the anchor value if there exists
+                string? anchor = ();
+                if self.tokenBuffer.token == ANCHOR {
+                    check self.checkToken();
+                    anchor = self.currentToken.value;
                     check self.separate(ANCHOR);
+                }
 
-                    // Obtain the tag if there exists
-                    string? tag = ();
-                    string? tagHandle = ();
-                    match self.tokenBuffer.token {
-                        TAG => {
-                            check self.checkToken();
-                            tag = self.currentToken.value;
-                            check self.separate(TAG);
-                        }
-                        TAG_HANDLE => {
-                            check self.checkToken();
-                            tagHandle = self.currentToken.value;
+                // Obtain the flow node
+                string value = check self.content(ANCHOR);
 
-                            self.lexer.state = LEXER_TAG_NODE;
-                            check self.checkToken(TAG);
-                            tag = self.currentToken.value;
-                            check self.separate(TAG);
-                        }
-                    }
+                // Check if the current node is a key
+                boolean isKey = check self.isNodeKey(ANCHOR);
 
-                    // Obtain the value of the flow node
-                    string value = check self.content(ANCHOR);
-
-                    return {
+                return {
                         tagHandle,
                         tag,
                         anchor,
-                        value
+                        value,
+                        isKey
                     };
+            }
+            TAG => {
+                // Obtain the tag name
+                string tag = self.currentToken.value;
+
+                // Check fi there is a separate
+                check self.separate(TAG);
+
+                // Obtain the anchor if there exists
+                string? anchor = ();
+                if self.tokenBuffer.token == ANCHOR {
+                    check self.checkToken();
+                    anchor = self.currentToken.value;
+                    check self.separate(ANCHOR);
                 }
+
+                // Obtain the flow node vale
+                string value = check self.content(ANCHOR);
+
+                // Check if the current node is a key
+                boolean isKey = check self.isNodeKey(ANCHOR);
+
+                return {
+                        tag,
+                        anchor,
+                        value,
+                        isKey
+                    };
+            }
+            ANCHOR => {
+                // Obtain the anchor name
+                string anchor = self.currentToken.value;
+
+                // Check if there is a separate
+                check self.separate(ANCHOR);
+
+                // Obtain the tag if there exists
+                string? tag = ();
+                string? tagHandle = ();
+                match self.tokenBuffer.token {
+                    TAG => {
+                        check self.checkToken();
+                        tag = self.currentToken.value;
+                        check self.separate(TAG);
+                    }
+                    TAG_HANDLE => {
+                        check self.checkToken();
+                        tagHandle = self.currentToken.value;
+
+                        self.lexer.state = LEXER_TAG_NODE;
+                        check self.checkToken(TAG);
+                        tag = self.currentToken.value;
+                        check self.separate(TAG);
+                    }
+                }
+
+                // Obtain the value of the flow node
+                string value = check self.content(TAG);
+
+                // Check if the current node is a key
+                boolean isKey = check self.isNodeKey(TAG);
+
+                return {
+                        tagHandle,
+                        tag,
+                        anchor,
+                        value,
+                        isKey
+                    };
+            }
+            MAPPING_KEY => { // Empty node as the key
+                check self.separate(MAPPING_KEY);
+                return {
+                    value: (),
+                    isKey: true
+                };
             }
         }
-        return self.generateError("EOF is reached. Cannot generate any more events");
+        return self.generateError(string `Invalid token '${self.currentToken.token}' as the first for generating an event`);
     }
 
     # Check the grammar productions for TAG directives.
@@ -387,6 +429,11 @@ class Parser {
                     emptyLine = true;
                 }
                 SEPARATION_IN_LINE => {
+                    // Continue to scan planar char if the white space at the EOL
+                    check self.checkToken(peek = true);
+                    if self.tokenBuffer.token == MAPPING_KEY {
+                        break;
+                    }
                 }
                 _ => { // Break the character when the token does not belong to planar scalar
                     break;
@@ -423,14 +470,28 @@ class Parser {
         return self.generateError(check self.formatErrorMessage(1, "<flow-node>", beforeToken));
     }
 
-    private function separate(YAMLToken beforeToken) returns ()|LexicalError|ParsingError {
+    private function separate(YAMLToken|string beforeToken, boolean optional = false) returns ()|LexicalError|ParsingError {
         self.lexer.state = LEXER_DOCUMENT_OUT;
+        check self.checkToken(peek = true);
+
+        // Only separation-in-line is considered for keys
+        if self.context == BLOCK_KEY || self.context == FLOW_KEY {
+            // If separate is optional, skip the check when no separate-in-line is detected
+            if optional && self.tokenBuffer.token != SEPARATION_IN_LINE {
+                return;
+            }
+
+            check self.checkToken();
+            return self.currentToken.token == SEPARATION_IN_LINE ? ()
+                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, beforeToken));
+        }
+
+        // Consider the separate for the latter contexts
         check self.checkToken();
 
-        // Only separation in line is considered for keys
-        if self.context == BLOCK_KEY || self.context == FLOW_KEY {
-            return self.currentToken.token == SEPARATION_IN_LINE ? ()
-                : self.generateError(check self.formatErrorMessage(2, SEPARATION_IN_LINE, beforeToken));
+        // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
+        if optional && !(self.tokenBuffer.token == EOL || self.tokenBuffer.token == SEPARATION_IN_LINE) {
+            return;
         }
 
         if self.currentToken.token == SEPARATION_IN_LINE {
@@ -463,6 +524,29 @@ class Parser {
         }
 
         return self.generateError(string `Invalid character ${self.currentToken.token} for a separate grammar`);
+    }
+
+    private function isNodeKey(string|YAMLToken beforeToken) returns boolean|LexicalError|ParsingError {
+        self.context = FLOW_KEY;
+
+        // If there are no whitespace, and the current token is ':'
+        if self.currentToken.token == MAPPING_KEY {
+            check self.separate(MAPPING_KEY);
+            self.expectEmptyNode = true;
+            return true;
+        }
+
+        // There are whitespace, and check if the next token is ':'
+        check self.separate(beforeToken, true);
+        check self.checkToken(peek = true);
+        if self.tokenBuffer.token == MAPPING_KEY {
+            check self.checkToken();
+            check self.separate(MAPPING_KEY);
+            self.expectEmptyNode = true;
+            return true;
+        }
+
+        return false;
     }
 
     # Find the first non-space character from tail.
@@ -561,12 +645,9 @@ class Parser {
     # Initialize the lexer with the attributes of a new line.
     #
     # + message - Error message to display when if the initialization fails 
-    # + incrementLine - Sets the next line to the lexer
     # + return - An error if it fails to initialize  
-    private function initLexer(string message = "Unexpected end of stream", boolean incrementLine = true) returns ParsingError? {
-        if (incrementLine) {
-            self.lineIndex += 1;
-        }
+    private function initLexer(string message = "Unexpected end of stream") returns ParsingError? {
+        self.lineIndex += 1;
         if (self.lineIndex >= self.numLines) {
             return self.generateError(message);
         }
@@ -604,7 +685,7 @@ class Parser {
     private function formatErrorMessage(
             int messageType,
             YAMLToken|YAMLToken[]|string expectedTokens = DUMMY,
-            YAMLToken beforeToken = DUMMY,
+            YAMLToken|string beforeToken = DUMMY,
             string value = "") returns string|ParsingError {
 
         match messageType {
@@ -621,7 +702,7 @@ class Parser {
                 } else { // If a single token
                     expectedTokensMessage = " '" + <string>expectedTokens + "'";
                 }
-                return "Expected" + expectedTokensMessage + " after '" + beforeToken + "', but found '" + self.currentToken.token + "'";
+                return "Expected" + expectedTokensMessage + " after '" + <string>beforeToken + "', but found '" + self.currentToken.token + "'";
             }
 
             2 => { // Duplicate key exists for ${value}

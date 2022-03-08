@@ -117,7 +117,7 @@ function tagShorthandDataGen() returns map<[string, string, string]> {
     dataProvider: invalidTagShorthandDataGen
 }
 function testInvalidTagShorthandEvent(string line, boolean isLexical) returns error? {
-    assertParsingError(line, isLexical);
+    check assertParsingError(line, isLexical);
 }
 
 function invalidTagShorthandDataGen() returns map<[string, boolean]> {
@@ -146,7 +146,7 @@ function nodeSeparateDataGen() returns map<[string[], string]> {
 
 @test:Config {}
 function testAliasEvent() returns error? {
-    Parser parser = new Parser(["*anchor"]);
+    Parser parser = check new Parser(["*anchor"]);
     Event event = check parser.parse();
 
     test:assertEquals((<AliasEvent>event).alias, "anchor");

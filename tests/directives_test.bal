@@ -20,7 +20,7 @@ function directiveDataGen() returns map<[string, string]> {
     groups: ["directives"]
 }
 function testAccurateYAMLDirective() returns error? {
-    Parser parser = new Parser(["%YAML 1.3", "---"]);
+    Parser parser = check new Parser(["%YAML 1.3", "---"]);
     _ = check parser.parse();
 
     test:assertEquals(parser.yamlVersion, "1.3");
@@ -29,16 +29,16 @@ function testAccurateYAMLDirective() returns error? {
 @test:Config {
     groups: ["directives"]
 }
-function testDuplicateYAMLDirectives() {
-    assertParsingError(["%YAML 1.3", "%YAML 1.1"]);
+function testDuplicateYAMLDirectives() returns error?{
+    check assertParsingError(["%YAML 1.3", "%YAML 1.1"]);
 }
 
 @test:Config {
     dataProvider: invalidDirectiveDataGen,
     groups: ["directives"]
 }
-function testInvalidYAMLDirectives(string line) {
-    assertParsingError(line);
+function testInvalidYAMLDirectives(string line) returns error? {
+    check assertParsingError(line);
 }
 
 function invalidDirectiveDataGen() returns map<[string]> {
@@ -99,15 +99,15 @@ function invalidUriHexDataGen() returns map<[string]> {
 }
 
 @test:Config {}
-function testTagDuplicates() {
-    assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
+function testTagDuplicates() returns error? {
+    check assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
 }
 
 @test:Config {
     dataProvider: tagHandlesDataGen
 }
 function testTagHandles(string line, string tagHandle, string tagPrefix) returns error? {
-    Parser parser = new Parser([line, "---"]);
+    Parser parser = check new Parser([line, "---"]);
     _ = check parser.parse();
     test:assertEquals(parser.tagHandles[tagHandle], tagPrefix);
 }

@@ -47,3 +47,25 @@ function testSeparateInLineAfterPlanar() returns error? {
 function testMultilinePlanarEvent() returns error?{
     check assertParsingEvent(["1st non-empty"," "," 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
 }
+
+@test:Config {
+    dataProvider: implicitKeyDataGen
+}
+function testImplicitKeyEvent(string line, string? key, string? value) returns error? {
+    Parser parser = check new Parser([line]);
+
+    Event event = check parser.parse();
+    test:assertTrue((<ScalarEvent>event).isKey);
+    test:assertEquals((<ScalarEvent>event).value, key);
+
+    event = check parser.parse();
+    test:assertEquals((<ScalarEvent>event).value, value);
+}
+
+function implicitKeyDataGen() returns map<[string, string?, string?]> {
+    return {
+        "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
+        "omitted value": ["omitted value: ", "omitted value", ()],
+        "no key": [": value", (), "value"]
+    };
+}

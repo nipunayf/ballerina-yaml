@@ -19,6 +19,7 @@ type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
     string? tagHandle  = ();
+    boolean isKey = false;
     // boolean implicit = true;
     // string style = ;
 |};
@@ -33,7 +34,7 @@ type MappingStartEvent record {|
 
 type ScalarEvent record {|
     *NodeEvent;
-    string value;
+    string? value;
 |};
 
 type EndEvent record {|
