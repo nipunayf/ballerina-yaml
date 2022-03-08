@@ -95,24 +95,24 @@ class Parser {
                 TAG_HANDLE => {
                     string tagHandle = self.currentToken.value;
 
+                    // Obtain the tag associated with the tag handle
                     self.lexer.state = LEXER_TAG_NODE;
                     check self.checkToken(TAG);
                     string tag = self.currentToken.value;
 
+                    // Check if there is a separate 
                     check self.separate(TAG);
-
-                    check self.checkToken(peek = true);
+                    
+                    // Obtain the anchor value if there exists
                     string? anchor = ();
                     if self.tokenBuffer.token == ANCHOR {
                         check self.checkToken();
                         anchor = self.currentToken.value;
-                        check self.checkToken(SEPARATION_IN_LINE);
+                        check self.separate(ANCHOR);
                     }
 
-                    self.lexer.state = LEXER_DOCUMENT_OUT;
-                    check self.checkToken();
-                    //TODO: check for either flow nodes or block nodes
-                    string value = self.currentToken.value;
+                    // Obtain the flow node
+                    string value = check self.content(ANCHOR);
 
                     return {
                         tagHandle,
@@ -122,23 +122,22 @@ class Parser {
                     };
                 }
                 TAG => {
+                    // Obtain the tag name
                     string tag = self.currentToken.value;
-                    self.lexer.state = LEXER_TAG_NODE;
 
+                    // Check fi there is a separate
                     check self.separate(TAG);
 
-                    check self.checkToken(peek = true);
+                    // Obtain the anchor if there exists
                     string? anchor = ();
                     if self.tokenBuffer.token == ANCHOR {
                         check self.checkToken();
                         anchor = self.currentToken.value;
-                        check self.checkToken(SEPARATION_IN_LINE);
+                        check self.separate(ANCHOR);
                     }
 
-                    self.lexer.state = LEXER_DOCUMENT_OUT;
-                    check self.checkToken();
-                    //TODO: check for either flow nodes or block nodes
-                    string value = self.currentToken.value;
+                    // Obtain the flow node vale
+                    string value = check self.content(ANCHOR);
 
                     return {
                         tag,
@@ -147,17 +146,20 @@ class Parser {
                     };
                 }
                 ANCHOR => {
+                    // Obtain the anchor name
                     string anchor = self.currentToken.value;
+
+                    // Check if there is a separate
                     check self.separate(ANCHOR);
 
-                    check self.checkToken(peek = true);
+                    // Obtain the tag if there exists
                     string? tag = ();
                     string? tagHandle = ();
                     match self.tokenBuffer.token {
                         TAG => {
                             check self.checkToken();
                             tag = self.currentToken.value;
-                            check self.checkToken(SEPARATION_IN_LINE);
+                            check self.separate(TAG);
                         }
                         TAG_HANDLE => {
                             check self.checkToken();
@@ -166,14 +168,12 @@ class Parser {
                             self.lexer.state = LEXER_TAG_NODE;
                             check self.checkToken(TAG);
                             tag = self.currentToken.value;
-                            check self.checkToken(SEPARATION_IN_LINE);
+                            check self.separate(TAG);
                         }
                     }
 
-                    self.lexer.state = LEXER_DOCUMENT_OUT;
-                    check self.checkToken();
-                    //TODO: check for either flow nodes or block nodes
-                    string value = self.currentToken.value;
+                    // Obtain the value of the flow node
+                    string value = check self.content(ANCHOR);
 
                     return {
                         tagHandle,
@@ -397,7 +397,34 @@ class Parser {
         return lexemeBuffer;
     }
 
+    private function content(YAMLToken beforeToken) returns string|LexicalError|ParsingError {
+        self.lexer.state = LEXER_DOCUMENT_OUT;
+        check self.checkToken();
+
+        // Check for flow scalars
+        match self.currentToken.token {
+            SINGLE_QUOTE_DELIMITER => {
+                return self.singleQuoteScalar();
+            }
+            DOUBLE_QUOTE_DELIMITER => {
+                return self.doubleQuoteScalar();
+            }
+            PLANAR_CHAR => {
+                return self.planarScalar();
+            }
+            // TODO: Flow sequence
+            // Check for flow sequences
+
+            // TODO: Flow mappings
+            // Check for flow mappings
+
+            // TODO: Consider block nodes
+        }
+        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", beforeToken));
+    }
+
     private function separate(YAMLToken beforeToken) returns ()|LexicalError|ParsingError {
+        self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken();
 
         // Only separation in line is considered for keys
@@ -576,7 +603,7 @@ class Parser {
     # + return - If success, the generated error message. Else, an error message.
     private function formatErrorMessage(
             int messageType,
-            YAMLToken|YAMLToken[] expectedTokens = DUMMY,
+            YAMLToken|YAMLToken[]|string expectedTokens = DUMMY,
             YAMLToken beforeToken = DUMMY,
             string value = "") returns string|ParsingError {
 
@@ -592,7 +619,7 @@ class Parser {
                     }, "");
                     expectedTokensMessage = tempMessage.substring(0, tempMessage.length() - 3);
                 } else { // If a single token
-                    expectedTokensMessage = " '" + expectedTokens + "'";
+                    expectedTokensMessage = " '" + <string>expectedTokens + "'";
                 }
                 return "Expected" + expectedTokensMessage + " after '" + beforeToken + "', but found '" + self.currentToken.token + "'";
             }
