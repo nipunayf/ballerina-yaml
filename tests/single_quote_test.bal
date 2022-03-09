@@ -49,9 +49,9 @@ function testMultilinePlanarEvent() returns error?{
 }
 
 @test:Config {
-    dataProvider: implicitKeyDataGen
+    dataProvider: flowKeyDataGen
 }
-function testImplicitKeyEvent(string line, string? key, string? value) returns error? {
+function testFlowKeyEvent(string line, string? key, string? value) returns error? {
     Parser parser = check new Parser([line]);
 
     Event event = check parser.parse();
@@ -62,12 +62,13 @@ function testImplicitKeyEvent(string line, string? key, string? value) returns e
     test:assertEquals((<ScalarEvent>event).value, value);
 }
 
-function implicitKeyDataGen() returns map<[string, string?, string?]> {
+function flowKeyDataGen() returns map<[string, string?, string?]> {
     return {
         "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
         "omitted value": ["omitted value: ", "omitted value", ()],
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
+        "explicit": ["? explicit: value", "explicit", "value"],
         "no key": [": value", (), "value"]
     };
 }

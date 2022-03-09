@@ -50,7 +50,7 @@ class Lexer {
     string lexemeBuffer = "";
 
     # Flag is enabled after a JSON key is detected.
-    # Used to generate mapping key even when it is possible to generate a planar scalar.
+    # Used to generate mapping value even when it is possible to generate a planar scalar.
     boolean isJsonKey = false;
 
     private map<string> escapedCharMap = {
@@ -284,14 +284,15 @@ class Lexer {
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
-                return self.generateToken(MAPPING_KEY);
+                return self.generateToken(MAPPING_VALUE);
             }
             "?" => {
                 self.lexeme += "?";
-                self.forward();
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                    self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
+                return self.generateToken(MAPPING_KEY);
             }
             "\"" => { // Process double quote flow style value
                 return self.generateToken(DOUBLE_QUOTE_DELIMITER);

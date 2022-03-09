@@ -226,11 +226,22 @@ class Parser {
                     isKey
                 };
             }
-            MAPPING_KEY => { // Empty node as the key
-                check self.separate(MAPPING_KEY);
+            MAPPING_VALUE => { // Empty node as the key
+                check self.separate(MAPPING_VALUE);
                 return {
                     value: (),
                     isKey: true
+                };
+            }
+            MAPPING_KEY => { // Explicit key
+                check self.separate(MAPPING_KEY);
+                string value = check self.content(MAPPING_KEY);
+                self.lexer.isJsonKey = true;
+                boolean isKey = check self.isNodeKey("single-quoted scalar");
+                self.lexer.isJsonKey = false;
+                return {
+                    value,
+                    isKey
                 };
             }
         }
@@ -439,7 +450,7 @@ class Parser {
                 SEPARATION_IN_LINE => {
                     // Continue to scan planar char if the white space at the EOL
                     check self.checkToken(peek = true);
-                    if self.tokenBuffer.token == MAPPING_KEY {
+                    if self.tokenBuffer.token == MAPPING_VALUE {
                         break;
                     }
                 }
@@ -538,8 +549,8 @@ class Parser {
         self.context = FLOW_KEY;
 
         // If there are no whitespace, and the current token is ':'
-        if self.currentToken.token == MAPPING_KEY {
-            check self.separate(MAPPING_KEY);
+        if self.currentToken.token == MAPPING_VALUE {
+            check self.separate(MAPPING_VALUE);
             self.expectEmptyNode = true;
             return true;
         }
@@ -547,9 +558,9 @@ class Parser {
         // There are whitespace, and check if the next token is ':'
         check self.separate(beforeToken, true);
         check self.checkToken(peek = true);
-        if self.tokenBuffer.token == MAPPING_KEY {
+        if self.tokenBuffer.token == MAPPING_VALUE {
             check self.checkToken();
-            check self.separate(MAPPING_KEY, self.lexer.isJsonKey);
+            check self.separate(MAPPING_VALUE, self.lexer.isJsonKey);
             self.expectEmptyNode = true;
             return true;
         }
