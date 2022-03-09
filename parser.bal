@@ -93,7 +93,7 @@ class Parser {
             DOUBLE_QUOTE_DELIMITER => {
                 string value = check self.doubleQuoteScalar();
                 self.lexer.isJsonKey = true;
-                boolean isKey = check self.isNodeKey("double-quoted scalar");
+                boolean isKey = check self.isNodeKey();
                 self.lexer.isJsonKey = false;
                 return {
                     value,
@@ -103,7 +103,7 @@ class Parser {
             SINGLE_QUOTE_DELIMITER => {
                 string value = check self.singleQuoteScalar();
                 self.lexer.isJsonKey = true;
-                boolean isKey = check self.isNodeKey("single-quoted scalar");
+                boolean isKey = check self.isNodeKey();
                 self.lexer.isJsonKey = false;
                 return {
                     value,
@@ -112,7 +112,7 @@ class Parser {
             }
             PLANAR_CHAR => {
                 string value = check self.planarScalar();
-                boolean isKey = check self.isNodeKey("planar scalar");
+                boolean isKey = check self.isNodeKey();
                 return {
                     value,
                     isKey
@@ -133,21 +133,21 @@ class Parser {
                 string tag = self.currentToken.value;
 
                 // Check if there is a separate 
-                check self.separate(TAG);
+                check self.separate();
 
                 // Obtain the anchor value if there exists
                 string? anchor = ();
                 if self.tokenBuffer.token == ANCHOR {
                     check self.checkToken();
                     anchor = self.currentToken.value;
-                    check self.separate(ANCHOR);
+                    check self.separate();
                 }
 
                 // Obtain the flow node
-                string value = check self.content(ANCHOR);
+                string value = check self.content();
 
                 // Check if the current node is a key
-                boolean isKey = check self.isNodeKey(ANCHOR);
+                boolean isKey = check self.isNodeKey();
 
                 return {
                     tagHandle,
@@ -162,21 +162,21 @@ class Parser {
                 string tag = self.currentToken.value;
 
                 // Check fi there is a separate
-                check self.separate(TAG);
+                check self.separate();
 
                 // Obtain the anchor if there exists
                 string? anchor = ();
                 if self.tokenBuffer.token == ANCHOR {
                     check self.checkToken();
                     anchor = self.currentToken.value;
-                    check self.separate(ANCHOR);
+                    check self.separate();
                 }
 
                 // Obtain the flow node vale
-                string value = check self.content(ANCHOR);
+                string value = check self.content();
 
                 // Check if the current node is a key
-                boolean isKey = check self.isNodeKey(ANCHOR);
+                boolean isKey = check self.isNodeKey();
 
                 return {
                     tag,
@@ -190,7 +190,7 @@ class Parser {
                 string anchor = self.currentToken.value;
 
                 // Check if there is a separate
-                check self.separate(ANCHOR);
+                check self.separate();
 
                 // Obtain the tag if there exists
                 string? tag = ();
@@ -199,7 +199,7 @@ class Parser {
                     TAG => {
                         check self.checkToken();
                         tag = self.currentToken.value;
-                        check self.separate(TAG);
+                        check self.separate();
                     }
                     TAG_HANDLE => {
                         check self.checkToken();
@@ -208,15 +208,15 @@ class Parser {
                         self.lexer.state = LEXER_TAG_NODE;
                         check self.checkToken(TAG);
                         tag = self.currentToken.value;
-                        check self.separate(TAG);
+                        check self.separate();
                     }
                 }
 
                 // Obtain the value of the flow node
-                string value = check self.content(TAG);
+                string value = check self.content();
 
                 // Check if the current node is a key
-                boolean isKey = check self.isNodeKey(TAG);
+                boolean isKey = check self.isNodeKey();
 
                 return {
                     tagHandle,
@@ -227,17 +227,17 @@ class Parser {
                 };
             }
             MAPPING_VALUE => { // Empty node as the key
-                check self.separate(MAPPING_VALUE);
+                check self.separate();
                 return {
                     value: (),
                     isKey: true
                 };
             }
             MAPPING_KEY => { // Explicit key
-                check self.separate(MAPPING_KEY);
-                string value = check self.content(MAPPING_KEY);
+                check self.separate();
+                string value = check self.content();
                 self.lexer.isJsonKey = true;
-                boolean isKey = check self.isNodeKey("single-quoted scalar");
+                boolean isKey = check self.isNodeKey();
                 self.lexer.isJsonKey = false;
                 return {
                     value,
@@ -463,7 +463,8 @@ class Parser {
         return lexemeBuffer;
     }
 
-    private function content(YAMLToken beforeToken) returns string|LexicalError|ParsingError {
+    private function content() returns string|LexicalError|ParsingError {
+       YAMLToken prevToken = self.currentToken.token;       
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken();
 
@@ -486,10 +487,12 @@ class Parser {
 
             // TODO: Consider block nodes
         }
-        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", beforeToken));
+        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", prevToken));
     }
 
-    private function separate(YAMLToken|string beforeToken, boolean optional = false) returns ()|LexicalError|ParsingError {
+    private function separate(boolean optional = false) returns ()|LexicalError|ParsingError {
+        YAMLToken prevToken = self.currentToken.token;
+        
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken(peek = true);
 
@@ -502,7 +505,7 @@ class Parser {
 
             check self.checkToken();
             return self.currentToken.token == SEPARATION_IN_LINE ? ()
-                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, beforeToken));
+                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, prevToken));
         }
 
         // Consider the separate for the latter contexts
@@ -545,22 +548,22 @@ class Parser {
         return self.generateError(string `Invalid character ${self.currentToken.token} for a separate grammar`);
     }
 
-    private function isNodeKey(string|YAMLToken beforeToken) returns boolean|LexicalError|ParsingError {
+    private function isNodeKey() returns boolean|LexicalError|ParsingError {
         self.context = FLOW_KEY;
 
         // If there are no whitespace, and the current token is ':'
         if self.currentToken.token == MAPPING_VALUE {
-            check self.separate(MAPPING_VALUE);
+            check self.separate();
             self.expectEmptyNode = true;
             return true;
         }
 
         // There are whitespace, and check if the next token is ':'
-        check self.separate(beforeToken, true);
+        check self.separate(true);
         check self.checkToken(peek = true);
         if self.tokenBuffer.token == MAPPING_VALUE {
             check self.checkToken();
-            check self.separate(MAPPING_VALUE, self.lexer.isJsonKey);
+            check self.separate(self.lexer.isJsonKey);
             self.expectEmptyNode = true;
             return true;
         }
