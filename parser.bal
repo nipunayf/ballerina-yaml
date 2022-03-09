@@ -45,7 +45,7 @@ class Parser {
         }
 
         match self.currentToken.token {
-            EOL => {
+            EOL|EMPTY_LINE => {
                 if self.expectEmptyNode {
                     self.expectEmptyNode = false;
                     return {
@@ -54,12 +54,7 @@ class Parser {
                 }
 
                 check self.initLexer();
-                check self.checkToken(peek = true);
-
-                while self.tokenBuffer.token == EOL {
-                    check self.initLexer();
-                    check self.checkToken(peek = true);
-                }
+                return self.parse();
             }
             DIRECTIVE => {
                 if (self.currentToken.value == "YAML") { // YAML directive
