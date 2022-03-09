@@ -12,7 +12,7 @@ function singleQuoteDataGen() returns map<[string[], string]> {
         "empty": [["''"], ""],
         "single-quote": [["''''"], "'"],
         "double-quote": [["''''''"], "''"],
-        "multi-line": [["' 1st non-empty",""," 2nd non-empty ","3rd non-empty '"], " 1st non-empty\n2nd non-empty 3rd non-empty "]
+        "multi-line": [["' 1st non-empty", "", " 2nd non-empty ", "3rd non-empty '"], " 1st non-empty\n2nd non-empty 3rd non-empty "]
     };
 }
 
@@ -44,8 +44,8 @@ function testSeparateInLineAfterPlanar() returns error? {
 }
 
 @test:Config {}
-function testMultilinePlanarEvent() returns error?{
-    check assertParsingEvent(["1st non-empty"," "," 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
+function testMultilinePlanarEvent() returns error? {
+    check assertParsingEvent(["1st non-empty", " ", " 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
 }
 
 @test:Config {
@@ -69,6 +69,7 @@ function flowKeyDataGen() returns map<[string, string?, string?]> {
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
         "explicit": ["? explicit: value", "explicit", "value"],
+        "double mapping values": ["'json-key'::planar", "json-key", ":planar"],
         "no key": [": value", (), "value"]
     };
 }

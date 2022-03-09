@@ -94,7 +94,6 @@ class Parser {
                 string value = check self.doubleQuoteScalar();
                 self.lexer.isJsonKey = true;
                 boolean isKey = check self.isNodeKey();
-                self.lexer.isJsonKey = false;
                 return {
                     value,
                     isKey
@@ -104,7 +103,6 @@ class Parser {
                 string value = check self.singleQuoteScalar();
                 self.lexer.isJsonKey = true;
                 boolean isKey = check self.isNodeKey();
-                self.lexer.isJsonKey = false;
                 return {
                     value,
                     isKey
@@ -236,9 +234,7 @@ class Parser {
             MAPPING_KEY => { // Explicit key
                 check self.separate();
                 string value = check self.content();
-                self.lexer.isJsonKey = true;
                 boolean isKey = check self.isNodeKey();
-                self.lexer.isJsonKey = false;
                 return {
                     value,
                     isKey
@@ -463,7 +459,7 @@ class Parser {
         return lexemeBuffer;
     }
 
-    private function content() returns string|LexicalError|ParsingError {
+    private function content(boolean isKey = false) returns string|LexicalError|ParsingError {
        YAMLToken prevToken = self.currentToken.token;       
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken();
@@ -471,9 +467,11 @@ class Parser {
         // Check for flow scalars
         match self.currentToken.token {
             SINGLE_QUOTE_DELIMITER => {
+                self.lexer.isJsonKey = isKey;
                 return self.singleQuoteScalar();
             }
             DOUBLE_QUOTE_DELIMITER => {
+                self.lexer.isJsonKey = isKey;
                 return self.doubleQuoteScalar();
             }
             PLANAR_CHAR => {
@@ -550,10 +548,12 @@ class Parser {
 
     private function isNodeKey() returns boolean|LexicalError|ParsingError {
         self.context = FLOW_KEY;
+        boolean isJsonKey = self.lexer.isJsonKey;
 
         // If there are no whitespace, and the current token is ':'
         if self.currentToken.token == MAPPING_VALUE {
-            check self.separate();
+            self.lexer.isJsonKey = false;
+            check self.separate(isJsonKey);
             self.expectEmptyNode = true;
             return true;
         }
@@ -563,7 +563,8 @@ class Parser {
         check self.checkToken(peek = true);
         if self.tokenBuffer.token == MAPPING_VALUE {
             check self.checkToken();
-            check self.separate(self.lexer.isJsonKey);
+            self.lexer.isJsonKey = false;
+            check self.separate(isJsonKey);
             self.expectEmptyNode = true;
             return true;
         }
