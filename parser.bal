@@ -1,12 +1,3 @@
-enum Context {
-    BLOCK_IN,
-    BLOCK_OUT,
-    BLOCK_KEY,
-    FLOW_IN,
-    FLOW_OUT,
-    FLOW_KEY
-}
-
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -25,10 +16,7 @@ class Parser {
     private string lexemeBuffer = "";
 
     # Lexical analyzer tool for getting the tokens
-    private Lexer lexer = new Lexer();
-
-    # Represents the current context of the parser
-    private Context context = BLOCK_OUT;
+    Lexer lexer = new Lexer();
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
@@ -460,7 +448,7 @@ class Parser {
     }
 
     private function content(boolean isKey = false) returns string|LexicalError|ParsingError {
-       YAMLToken prevToken = self.currentToken.token;       
+        YAMLToken prevToken = self.currentToken.token;
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken();
 
@@ -488,14 +476,14 @@ class Parser {
         return self.generateError(check self.formatErrorMessage(1, "<flow-node>", prevToken));
     }
 
-    private function separate(boolean optional = false) returns ()|LexicalError|ParsingError {
+    private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
         YAMLToken prevToken = self.currentToken.token;
-        
+
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken(peek = true);
 
         // Only separation-in-line is considered for keys
-        if self.context == BLOCK_KEY || self.context == FLOW_KEY {
+        if self.lexer.context == BLOCK_KEY || self.lexer.context == FLOW_KEY {
             // If separate is optional, skip the check when no separate-in-line is detected
             if optional && self.tokenBuffer.token != SEPARATION_IN_LINE {
                 return;
@@ -506,13 +494,14 @@ class Parser {
                 : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, prevToken));
         }
 
-        // Consider the separate for the latter contexts
-        check self.checkToken();
 
         // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
         if optional && !(self.tokenBuffer.token == EOL || self.tokenBuffer.token == SEPARATION_IN_LINE) {
             return;
         }
+
+        // Consider the separate for the latter contexts
+        check self.checkToken();
 
         if self.currentToken.token == SEPARATION_IN_LINE {
             // Check for s-b comment
@@ -524,18 +513,24 @@ class Parser {
         }
 
         // For the rest of the contexts, check either separation in line or comment lines
-        while self.currentToken.token == EOL {
-            check self.initLexer();
+        while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+            ParsingError? err = self.initLexer();
+            if err is ParsingError {
+                return optional || allowEmptyNode ? () : err;
+            }
             check self.checkToken(peek = true);
 
             //TODO: account flow-line prefix
             match self.tokenBuffer.token {
-                EOL => { // Check for multi-lines
+                EOL|EMPTY_LINE => { // Check for multi-lines
                     check self.checkToken();
                 }
                 SEPARATION_IN_LINE => { // Check for l-comment
                     check self.checkToken();
-                    check self.checkToken(EOL);
+                    check self.checkToken(peek = true);
+                    if self.tokenBuffer.token != EOL {
+                        return;
+                    }
                 }
                 _ => {
                     return;
@@ -543,29 +538,45 @@ class Parser {
             }
         }
 
-        return self.generateError(string `Invalid character ${self.currentToken.token} for a separate grammar`);
+        return self.generateError(check self.formatErrorMessage(1, [EOL, SEPARATION_IN_LINE], self.currentToken.token));
     }
 
     private function isNodeKey() returns boolean|LexicalError|ParsingError {
-        self.context = FLOW_KEY;
         boolean isJsonKey = self.lexer.isJsonKey;
 
         // If there are no whitespace, and the current token is ':'
         if self.currentToken.token == MAPPING_VALUE {
             self.lexer.isJsonKey = false;
-            check self.separate(isJsonKey);
+            self.lexer.context = FLOW_IN;
+            check self.separate(isJsonKey, true);
             self.expectEmptyNode = true;
             return true;
         }
 
-        // There are whitespace, and check if the next token is ':'
+        // If there ano no whitespace, and the current token is ","
+        if self.currentToken.token == SEPARATOR {
+            check self.separate(true);
+            self.lexer.context = FLOW_KEY;
+            return true;
+        }
+
+        // There are whitespace, and consider next tokens for either ":" or ","
         check self.separate(true);
         check self.checkToken(peek = true);
+
         if self.tokenBuffer.token == MAPPING_VALUE {
             check self.checkToken();
             self.lexer.isJsonKey = false;
-            check self.separate(isJsonKey);
+            self.lexer.context = FLOW_IN;
+            check self.separate(isJsonKey, true);
             self.expectEmptyNode = true;
+            return true;
+        }
+
+        if self.tokenBuffer.token == SEPARATOR {
+            check self.checkToken();
+            check self.separate(true);
+            self.lexer.context = FLOW_KEY;
             return true;
         }
 

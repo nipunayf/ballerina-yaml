@@ -1,9 +1,9 @@
 import ballerina/regex;
 
 enum RegexPattern {
-    PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\xd7ff\\xe000-\\xfffd",
-    JSON_PATTERN = "\\x09\\x20-\\xffff",
-    BOM_PATTERN = "\\xfeff",
+    PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\ud7ff\\ue000-\\ufffd",
+    JSON_PATTERN = "\\x09\\x20-\\uffff",
+    BOM_PATTERN = "\\ufeff",
     DECIMAL_DIGIT_PATTERN = "0-9",
     HEXADECIMAL_DIGIT_PATTERN = "0-9a-fA-F",
     OCTAL_DIGIT_PATTERN = "0-7",
@@ -28,6 +28,16 @@ enum State {
     LEXER_SINGLE_QUOTE
 }
 
+# Represents the different contexts of the Lexer introduced in the YAML specification.
+enum Context {
+    BLOCK_IN,
+    BLOCK_OUT,
+    BLOCK_KEY,
+    FLOW_IN,
+    FLOW_OUT,
+    FLOW_KEY
+}
+
 # Generates tokens based on the YAML lexemes  
 class Lexer {
     # Properties to represent current position 
@@ -48,6 +58,9 @@ class Lexer {
 
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
+
+    # Represents the current context of the parser
+    Context context = BLOCK_OUT;
 
     # Flag is enabled after a JSON key is detected.
     # Used to generate mapping value even when it is possible to generate a planar scalar.
@@ -299,6 +312,9 @@ class Lexer {
             }
             "'" => {
                 return self.generateToken(SINGLE_QUOTE_DELIMITER);
+            }
+            "," => {
+                return self.generateToken(SEPARATOR);
             }
         }
 
@@ -618,8 +634,9 @@ class Lexer {
         }
 
         // Process ns-plain-safe character
-        //TODO: exclude flow indicator where necessary
-        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+        if self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
+        [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN, "#", ":"]
+        : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
             self.lexeme += whitespace + <string>self.peek();
             return false;
         }

@@ -15,3 +15,15 @@ function documentMarkersDataGen() returns map<[string, YAMLToken]> {
         "document-marker": ["...", DOCUMENT_MARKER]
     };
 }
+
+@test:Config {}
+function testKeyMapSpanningMultipleValues() returns error? {
+    Parser parser = check new Parser(["key : ", " ", "", " value"]);
+
+    Event event = check parser.parse();
+    test:assertTrue((<ScalarEvent>event).isKey);
+    test:assertEquals((<ScalarEvent>event).value, "key");
+
+    event = check parser.parse();
+    test:assertEquals((<ScalarEvent>event).value, "value");
+}
