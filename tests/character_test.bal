@@ -169,3 +169,31 @@ function endEventDataGen() returns map<[string, EndEventType]> {
         "end-document": ["...", END_DOCUMENT]
     };
 }
+
+@test:Config {
+    dataProvider: startEventDataGen
+}
+function testStartEvent(string line, int typeID, string? anchor) returns error? {
+    Parser parser = check new Parser([line]);
+    Event event = check parser.parse();
+
+    match typeID {
+        1 => {
+            test:assertTrue(event is MappingStartEvent);
+            test:assertEquals((<MappingStartEvent>event).anchor, anchor);
+        }
+        2 => {
+            test:assertTrue(event is SequenceStartEvent);
+            test:assertEquals((<SequenceStartEvent>event).anchor, anchor);
+        }
+    }
+}
+
+function startEventDataGen() returns map<[string, int, string?]> {
+    return {
+        "mapping-start with tag": ["&anchor {", 1, "anchor"],
+        "mapping-start": ["{", 1, ()],
+        "sequence-start with tag": ["&anchor [", 2, "anchor"],
+        "sequence-start": ["[", 2, ()]
+    };
+}

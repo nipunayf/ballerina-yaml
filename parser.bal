@@ -228,10 +228,16 @@ class Parser {
                     endType: END_DOCUMENT
                 };
             }
+            SEQUENCE_START => {
+                
+            }
             SEQUENCE_END => {
                 return {
                     endType: END_SEQUENCE
                 };
+            }
+            MAPPING_START => {
+
             }
             MAPPING_END => {
                 return {
