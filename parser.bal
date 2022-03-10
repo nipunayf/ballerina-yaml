@@ -223,6 +223,21 @@ class Parser {
                     isKey
                 };
             }
+            DOCUMENT_MARKER => {
+                return {
+                    endType: END_DOCUMENT
+                };
+            }
+            SEQUENCE_END => {
+                return {
+                    endType: END_SEQUENCE
+                };
+            }
+            MAPPING_END => {
+                return {
+                    endType: END_MAPPING
+                };
+            }
         }
         return self.generateError(string `Invalid token '${self.currentToken.token}' as the first for generating an event`);
     }
@@ -488,7 +503,6 @@ class Parser {
             return self.currentToken.token == SEPARATION_IN_LINE ? ()
                 : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, prevToken));
         }
-
 
         // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
         if optional && !(self.tokenBuffer.token == EOL || self.tokenBuffer.token == SEPARATION_IN_LINE) {

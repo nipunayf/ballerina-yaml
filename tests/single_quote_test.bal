@@ -90,11 +90,12 @@ function testMultipleMapEntriesEvent(string[] arr, string?[] keys, string?[] val
         event = check parser.parse();
         test:assertEquals((<ScalarEvent>event).value, values[i]);
     }
-}
+}   
 
 function multipleMapEntriesDataGen() returns map<[string[], string?[], string?[]]> {
     return {
         "multiple values": [["first: second ,", "third: forth"], ["first", "third"], ["second", "forth"]],
+        "ends with comma": [["first: second ,", "third: forth ,"], ["first", "third"], ["second", "forth"]],
         "multiline span": [["key : ", " ", "", " value"], ["key"], ["value"]]
     };
 }

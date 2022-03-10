@@ -151,3 +151,21 @@ function testAliasEvent() returns error? {
 
     test:assertEquals((<AliasEvent>event).alias, "anchor");
 }
+
+@test:Config {
+    dataProvider: endEventDataGen
+}
+function testEndEvent(string line, EndEventType endType) returns error? {
+    Parser parser = check new Parser([line]);
+    Event event = check parser.parse();
+
+    test:assertEquals((<EndEvent>event).endType, endType);
+}
+
+function endEventDataGen() returns map<[string, EndEventType]> {
+    return {
+        "end-sequence": ["]", END_SEQUENCE],
+        "end-mapping": ["}", END_MAPPING],
+        "end-document": ["...", END_DOCUMENT]
+    };
+}

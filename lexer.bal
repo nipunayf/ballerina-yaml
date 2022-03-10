@@ -316,6 +316,18 @@ class Lexer {
             "," => {
                 return self.generateToken(SEPARATOR);
             }
+            "[" => {
+                return self.generateToken(SEQUENCE_START);
+            }
+            "]" => {
+                return self.generateToken(SEQUENCE_END);
+            }
+            "{" => {
+                return self.generateToken(MAPPING_START);
+            }
+            "}" => {
+                return self.generateToken(MAPPING_END);
+            }
         }
 
         // Check for first character of planar scalar
