@@ -155,45 +155,37 @@ function testAliasEvent() returns error? {
 @test:Config {
     dataProvider: endEventDataGen
 }
-function testEndEvent(string line, EndEventType endType) returns error? {
+function testEndEvent(string line, EventType endType) returns error? {
     Parser parser = check new Parser([line]);
     Event event = check parser.parse();
 
     test:assertEquals((<EndEvent>event).endType, endType);
 }
 
-function endEventDataGen() returns map<[string, EndEventType]> {
+function endEventDataGen() returns map<[string, EventType]> {
     return {
-        "end-sequence": ["]", END_SEQUENCE],
-        "end-mapping": ["}", END_MAPPING],
-        "end-document": ["...", END_DOCUMENT]
+        "end-sequence": ["]", SEQUENCE],
+        "end-mapping": ["}", MAPPING],
+        "end-document": ["...", DOCUMENT]
     };
 }
 
 @test:Config {
     dataProvider: startEventDataGen
 }
-function testStartEvent(string line, int typeID, string? anchor) returns error? {
+function testStartEvent(string line, EventType eventType, string? anchor) returns error? {
     Parser parser = check new Parser([line]);
     Event event = check parser.parse();
 
-    match typeID {
-        1 => {
-            test:assertTrue(event is MappingStartEvent);
-            test:assertEquals((<MappingStartEvent>event).anchor, anchor);
-        }
-        2 => {
-            test:assertTrue(event is SequenceStartEvent);
-            test:assertEquals((<SequenceStartEvent>event).anchor, anchor);
-        }
-    }
+    test:assertEquals((<StartEvent>event).startType, eventType);
+    test:assertEquals((<StartEvent>event).anchor, anchor);
 }
 
-function startEventDataGen() returns map<[string, int, string?]> {
+function startEventDataGen() returns map<[string, EventType, string?]> {
     return {
-        "mapping-start with tag": ["&anchor {", 1, "anchor"],
-        "mapping-start": ["{", 1, ()],
-        "sequence-start with tag": ["&anchor [", 2, "anchor"],
-        "sequence-start": ["[", 2, ()]
+        "mapping-start with tag": ["&anchor {", MAPPING, "anchor"],
+        "mapping-start": ["{", MAPPING, ()],
+        "sequence-start with tag": ["&anchor [", SEQUENCE, "anchor"],
+        "sequence-start": ["[", SEQUENCE, ()]
     };
 }

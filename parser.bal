@@ -8,6 +8,9 @@ class Parser {
     # Current token
     private Token currentToken = {token: DUMMY};
 
+    # Previous YAML token
+    private YAMLToken prevToken = DUMMY;
+
     # Used to store the token after peeked.
     # Used later when the checkToken method is invoked.
     private Token tokenBuffer = {token: DUMMY};
@@ -73,31 +76,8 @@ class Parser {
                     tags: self.tagHandles
                 };
             }
-            DOUBLE_QUOTE_DELIMITER => {
-                string value = check self.doubleQuoteScalar();
-                self.lexer.isJsonKey = true;
-                boolean isKey = check self.isNodeKey();
-                return {
-                    value,
-                    isKey
-                };
-            }
-            SINGLE_QUOTE_DELIMITER => {
-                string value = check self.singleQuoteScalar();
-                self.lexer.isJsonKey = true;
-                boolean isKey = check self.isNodeKey();
-                return {
-                    value,
-                    isKey
-                };
-            }
-            PLANAR_CHAR => {
-                string value = check self.planarScalar();
-                boolean isKey = check self.isNodeKey();
-                return {
-                    value,
-                    isKey
-                };
+            DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
+                return self.constructEvent(check self.dataNode(true));
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -124,19 +104,7 @@ class Parser {
                     check self.separate();
                 }
 
-                // Obtain the flow node
-                string value = check self.content();
-
-                // Check if the current node is a key
-                boolean isKey = check self.isNodeKey();
-
-                return {
-                    tagHandle,
-                    tag,
-                    anchor,
-                    value,
-                    isKey
-                };
+                return self.constructEvent({tag, tagHandle, anchor}, check self.dataNode());
             }
             TAG => {
                 // Obtain the tag name
@@ -153,18 +121,7 @@ class Parser {
                     check self.separate();
                 }
 
-                // Obtain the flow node vale
-                string value = check self.content();
-
-                // Check if the current node is a key
-                boolean isKey = check self.isNodeKey();
-
-                return {
-                    tag,
-                    anchor,
-                    value,
-                    isKey
-                };
+                return self.constructEvent({tag, anchor}, check self.dataNode());
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -193,19 +150,7 @@ class Parser {
                     }
                 }
 
-                // Obtain the value of the flow node
-                string value = check self.content();
-
-                // Check if the current node is a key
-                boolean isKey = check self.isNodeKey();
-
-                return {
-                    tagHandle,
-                    tag,
-                    anchor,
-                    value,
-                    isKey
-                };
+                return self.constructEvent({tagHandle, tag, anchor}, check self.dataNode());
             }
             MAPPING_VALUE => { // Empty node as the key
                 check self.separate();
@@ -216,33 +161,22 @@ class Parser {
             }
             MAPPING_KEY => { // Explicit key
                 check self.separate();
-                string value = check self.content();
-                boolean isKey = check self.isNodeKey();
-                return {
-                    value,
-                    isKey
-                };
-            }
-            DOCUMENT_MARKER => {
-                return {
-                    endType: END_DOCUMENT
-                };
-            }
-            SEQUENCE_START => {
-                
-            }
-            SEQUENCE_END => {
-                return {
-                    endType: END_SEQUENCE
-                };
+                return self.constructEvent(check self.dataNode());
             }
             MAPPING_START => {
-
+                return {startType: MAPPING};
+            }
+            SEQUENCE_START => {
+                return {startType: SEQUENCE};
+            }
+            DOCUMENT_MARKER => {
+                return {endType: DOCUMENT};
+            }
+            SEQUENCE_END => {
+                return {endType: SEQUENCE};
             }
             MAPPING_END => {
-                return {
-                    endType: END_MAPPING
-                };
+                return {endType: MAPPING};
             }
         }
         return self.generateError(string `Invalid token '${self.currentToken.token}' as the first for generating an event`);
@@ -463,38 +397,48 @@ class Parser {
         return lexemeBuffer;
     }
 
-    private function content(boolean isKey = false) returns string|LexicalError|ParsingError {
-        YAMLToken prevToken = self.currentToken.token;
+    private function dataNode(boolean peeked = false) returns map<anydata>|LexicalError|ParsingError {
+        // Obtain the flow node value
+        string|EventType value = check self.content(peeked);
+
+        // Check if the current node is a key
+        boolean isKey = check self.isNodeKey();
+
+        return value is EventType ? {startType: value, isKey} : {value: value, isKey};
+    }
+
+    private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
         self.lexer.state = LEXER_DOCUMENT_OUT;
-        check self.checkToken();
+
+        if !peeked {
+            check self.checkToken();
+        }
 
         // Check for flow scalars
         match self.currentToken.token {
             SINGLE_QUOTE_DELIMITER => {
-                self.lexer.isJsonKey = isKey;
+                self.lexer.isJsonKey = true;
                 return self.singleQuoteScalar();
             }
             DOUBLE_QUOTE_DELIMITER => {
-                self.lexer.isJsonKey = isKey;
+                self.lexer.isJsonKey = true;
                 return self.doubleQuoteScalar();
             }
             PLANAR_CHAR => {
                 return self.planarScalar();
             }
-            // TODO: Flow sequence
-            // Check for flow sequences
-
-            // TODO: Flow mappings
-            // Check for flow mappings
-
+            SEQUENCE_START => {
+                return SEQUENCE;
+            }
+            MAPPING_START => {
+                return MAPPING;
+            }
             // TODO: Consider block nodes
         }
-        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", prevToken));
+        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", self.prevToken));
     }
 
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
-        YAMLToken prevToken = self.currentToken.token;
-
         self.lexer.state = LEXER_DOCUMENT_OUT;
         check self.checkToken(peek = true);
 
@@ -507,7 +451,7 @@ class Parser {
 
             check self.checkToken();
             return self.currentToken.token == SEPARATION_IN_LINE ? ()
-                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, prevToken));
+                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, self.prevToken));
         }
 
         // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
@@ -598,6 +542,20 @@ class Parser {
         return false;
     }
 
+    private function constructEvent(map<anydata> m1, map<anydata>? m2 = ()) returns Event|ParsingError {
+        map<anydata> returnMap = m1.clone();
+
+        if m2 != () {
+            m2.keys().forEach(function(string key) {
+                returnMap[key] = m2[key];
+            });
+        }
+
+        error|Event processedMap = returnMap.cloneWithType(Event);
+
+        return processedMap is Event ? processedMap : self.generateError('error:message(processedMap));
+    }
+
     # Find the first non-space character from tail.
     #
     # + value - String to be trimmed
@@ -647,11 +605,11 @@ class Parser {
     # + peek - Stores the token in the buffer
     # + return - Parsing error if not found
     private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
-        YAMLToken prevToken = self.currentToken.token;
         Token token;
 
         // Obtain a token form the lexer if there is none in the buffer.
         if self.tokenBuffer.token == DUMMY {
+            self.prevToken = self.currentToken.token;
             token = check self.lexer.getToken();
         } else {
             token = self.tokenBuffer;
@@ -672,7 +630,7 @@ class Parser {
 
         // Automatically generates a template error message if there is no custom message.
         string errorMessage = customMessage.length() == 0
-                                ? check self.formatErrorMessage(1, expectedTokens, prevToken)
+                                ? check self.formatErrorMessage(1, expectedTokens, self.prevToken)
                                 : customMessage;
 
         // Generate an error if the expected token differ from the actual token.
