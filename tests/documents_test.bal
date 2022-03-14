@@ -15,3 +15,8 @@ function documentMarkersDataGen() returns map<[string, YAMLToken]> {
         "document-marker": ["...", DOCUMENT_MARKER]
     };
 }
+
+@test:Config {}
+function testKeyMapSpanningMultipleValues() returns error? {
+    check assertParsingEvent(["", " ", "", " value"], "value");
+}

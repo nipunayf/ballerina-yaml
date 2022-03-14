@@ -61,18 +61,34 @@ function getToken(Lexer lexer, int index) returns Token|error {
     return token;
 }
 
-function assertParsingEvent(string|string[] lines, string value) returns error?{
-    Parser parser = new Parser((lines is string) ? [lines] : lines);
+function assertParsingEvent(string|string[] lines, string value = "", string tag = "", string tagHandle = "", string anchor = "") returns error? {
+    Parser parser = check new Parser((lines is string) ? [lines] : lines);
     Event event = check parser.parse();
-    test:assertEquals((<ScalarEvent>event).value, value);
+
+    if value.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).value, value);
+    }
+
+    if tag.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).tag, tag);
+    }
+
+    if anchor.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).anchor, anchor);
+    }
+
+    if tagHandle.length() > 0 {
+        test:assertEquals((<ScalarEvent>event).tagHandle, tagHandle);
+    }
 }
 
 # Assert if an parsing error is generated during the parsing
 #
-# + lines - Lines to be parsed.
+# + lines - Lines to be parsed.  
 # + isLexical - If set, checks for Lexical errors. Else, checks for Parsing errors.
-function assertParsingError(string|string[] lines, boolean isLexical = false) {
-    Parser parser = new Parser((lines is string) ? [lines] : lines);
+# + return - An parsing error if the line is empty.
+function assertParsingError(string|string[] lines, boolean isLexical = false) returns error? {
+    Parser parser = check new Parser((lines is string) ? [lines] : lines);
     Event|error err = parser.parse();
 
     if (isLexical) {

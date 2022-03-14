@@ -20,7 +20,7 @@ function directiveDataGen() returns map<[string, string]> {
     groups: ["directives"]
 }
 function testAccurateYAMLDirective() returns error? {
-    Parser parser = new Parser(["%YAML 1.3", "---"]);
+    Parser parser = check new Parser(["%YAML 1.3", "---"]);
     _ = check parser.parse();
 
     test:assertEquals(parser.yamlVersion, "1.3");
@@ -29,16 +29,16 @@ function testAccurateYAMLDirective() returns error? {
 @test:Config {
     groups: ["directives"]
 }
-function testDuplicateYAMLDirectives() {
-    assertParsingError(["%YAML 1.3", "%YAML 1.1"]);
+function testDuplicateYAMLDirectives() returns error?{
+    check assertParsingError(["%YAML 1.3", "%YAML 1.1"]);
 }
 
 @test:Config {
     dataProvider: invalidDirectiveDataGen,
     groups: ["directives"]
 }
-function testInvalidYAMLDirectives(string line) {
-    assertParsingError(line);
+function testInvalidYAMLDirectives(string line) returns error? {
+    check assertParsingError(line);
 }
 
 function invalidDirectiveDataGen() returns map<[string]> {
@@ -53,7 +53,7 @@ function invalidDirectiveDataGen() returns map<[string]> {
     dataProvider: validTagDataGen
 }
 function testValidTagHandlers(string tag, string lexeme) returns error? {
-    Lexer lexer = setLexerString(tag, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(tag, LEXER_TAG_HANDLE);
     check assertToken(lexer, TAG_HANDLE, lexeme = lexeme);
 }
 
@@ -75,9 +75,11 @@ function testTagPrefixTokens(string lexeme, string value) returns error? {
 
 function tagPrefixDataGen() returns map<[string, string]> {
     return {
-        "local tag prefix": ["!local- ", "!local-"],
-        "global tag prefix": ["tag:example.com,2000:app/  ", "tag:example.com,2000:app/"],
-        "global tag prefix with hex": ["%abglobal  ", "%abglobal"]
+        "local-tag-prefix": ["!local- ", "!local-"],
+        "global-tag-prefix": ["tag:example.com,2000:app/  ", "tag:example.com,2000:app/"],
+        "global-tag-prefix starting hex": ["%21global  ", "!global"],
+        "global-tag-prefix inline hex": ["global%21hex  ", "global!hex"],
+        "global-tag-prefix single-hex": ["%21  ", "!"]
     };
 }
 
@@ -97,15 +99,15 @@ function invalidUriHexDataGen() returns map<[string]> {
 }
 
 @test:Config {}
-function testTagDuplicates() {
-    assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
+function testTagDuplicates() returns error? {
+    check assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
 }
 
 @test:Config {
     dataProvider: tagHandlesDataGen
 }
 function testTagHandles(string line, string tagHandle, string tagPrefix) returns error? {
-    Parser parser = new Parser([line, "---"]);
+    Parser parser = check new Parser([line, "---"]);
     _ = check parser.parse();
     test:assertEquals(parser.tagHandles[tagHandle], tagPrefix);
 }

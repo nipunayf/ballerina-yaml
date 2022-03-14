@@ -12,7 +12,7 @@ function singleQuoteDataGen() returns map<[string[], string]> {
         "empty": [["''"], ""],
         "single-quote": [["''''"], "'"],
         "double-quote": [["''''''"], "''"],
-        "multi-line": [["' 1st non-empty",""," 2nd non-empty ","3rd non-empty '"], " 1st non-empty\n2nd non-empty 3rd non-empty "]
+        "multi-line": [["' 1st non-empty", "", " 2nd non-empty ", "3rd non-empty '"], " 1st non-empty\n2nd non-empty 3rd non-empty "]
     };
 }
 
@@ -44,6 +44,58 @@ function testSeparateInLineAfterPlanar() returns error? {
 }
 
 @test:Config {}
-function testMultilinePlanarEvent() returns error?{
-    check assertParsingEvent(["1st non-empty"," "," 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
+function testMultilinePlanarEvent() returns error? {
+    check assertParsingEvent(["1st non-empty", " ", " 2nd non-empty ", "  3rd non-empty"], "1st non-empty\n2nd non-empty 3rd non-empty");
+}
+
+@test:Config {
+    dataProvider: flowKeyDataGen
+}
+function testFlowKeyEvent(string line, string? key, string? value) returns error? {
+    Parser parser = check new Parser([line]);
+
+    Event event = check parser.parse();
+    test:assertTrue((<ScalarEvent>event).isKey);
+    test:assertEquals((<ScalarEvent>event).value, key);
+
+    event = check parser.parse();
+    test:assertEquals((<ScalarEvent>event).value, value);
+}
+
+function flowKeyDataGen() returns map<[string, string?, string?]> {
+    return {
+        "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
+        "omitted value": ["omitted value: ", "omitted value", ()],
+        "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
+        "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
+        "json-key with space": ["'json-key': \"json\"", "json-key", "json"],
+        "explicit": ["? explicit: value", "explicit", "value"],
+        "double mapping values": ["'json-key'::planar", "json-key", ":planar"],
+        "no key": [": value", (), "value"]
+    };
+}
+
+@test:Config {
+    dataProvider: multipleMapEntriesDataGen
+}
+function testMultipleMapEntriesEvent(string[] arr, string?[] keys, string?[] values) returns error? {
+    Parser parser = check new Parser(arr);
+
+    foreach int i in 0 ... values.length() - 1 {
+        parser.lexer.context = FLOW_IN;
+        Event event = check parser.parse();
+        test:assertTrue((<ScalarEvent>event).isKey);
+        test:assertEquals((<ScalarEvent>event).value, keys[i]);
+
+        event = check parser.parse();
+        test:assertEquals((<ScalarEvent>event).value, values[i]);
+    }
+}   
+
+function multipleMapEntriesDataGen() returns map<[string[], string?[], string?[]]> {
+    return {
+        "multiple values": [["first: second ,", "third: forth"], ["first", "third"], ["second", "forth"]],
+        "ends with comma": [["first: second ,", "third: forth ,"], ["first", "third"], ["second", "forth"]],
+        "multiline span": [["key : ", " ", "", " value"], ["key"], ["value"]]
+    };
 }

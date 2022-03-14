@@ -1,13 +1,23 @@
-type Event AliasEvent|StreamStartEvent|DocumentStartEvent|SequenceStartEvent|
-    MappingStartEvent|ScalarEvent|EndEvent;
+type Event AliasEvent|ScalarEvent|DocumentStartEvent|StartEvent|EndEvent;
 
 type AliasEvent record {|
-    string anchor;
+    string alias;
 |};
 
-type StreamStartEvent record {|
-    string encoding;
+type NodeEvent record {|
+    string? anchor = ();
+    string? tag = ();
+    string? tagHandle  = ();
+    boolean isKey = false;
+    // boolean implicit = true;
+    // string style = ;
 |};
+
+type ScalarEvent record {|
+    *NodeEvent;
+    string? value;
+|};
+
 
 type DocumentStartEvent record {|
     boolean explicit = false;
@@ -15,33 +25,18 @@ type DocumentStartEvent record {|
     map<string> tags;
 |};
 
-type NodeEvent record {|
-    string? anchor = ();
-    string? tag = ();
-    // boolean implicit = true;
-    // string style = ;
-|};
-
-type SequenceStartEvent record {|
+type StartEvent record {|
+    EventType startType;
     *NodeEvent;
-|};
-
-type MappingStartEvent record {|
-    *NodeEvent;
-|};
-
-type ScalarEvent record {|
-    *NodeEvent;
-    string value;
 |};
 
 type EndEvent record {|
-    EndEventType endType;
+    EventType endType;
 |};
 
-enum EndEventType {
-    END_STREAM,
-    END_DOCUMENT,
-    END_SEQUENCE,
-    END_MAPPING
+enum EventType {
+    STREAM,
+    DOCUMENT,
+    SEQUENCE,
+    MAPPING
 }

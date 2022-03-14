@@ -1,9 +1,9 @@
 import ballerina/regex;
 
 enum RegexPattern {
-    PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\xd7ff\\xe000-\\xfffd",
-    JSON_PATTERN = "\\x09\\x20-\\xffff",
-    BOM_PATTERN = "\\xfeff",
+    PRINTABLE_PATTERN = "\\x09\\x0a\\x0d\\x20-\\x7e\\x85\\xa0-\\ud7ff\\ue000-\\ufffd",
+    JSON_PATTERN = "\\x09\\x20-\\uffff",
+    BOM_PATTERN = "\\ufeff",
     DECIMAL_DIGIT_PATTERN = "0-9",
     HEXADECIMAL_DIGIT_PATTERN = "0-9a-fA-F",
     OCTAL_DIGIT_PATTERN = "0-7",
@@ -19,11 +19,23 @@ enum RegexPattern {
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
+    LEXER_TAG_HANDLE,
     LEXER_TAG_PREFIX,
+    LEXER_TAG_NODE,
     LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
     LEXER_SINGLE_QUOTE
+}
+
+# Represents the different contexts of the Lexer introduced in the YAML specification.
+enum Context {
+    BLOCK_IN,
+    BLOCK_OUT,
+    BLOCK_KEY,
+    FLOW_IN,
+    FLOW_OUT,
+    FLOW_KEY
 }
 
 # Generates tokens based on the YAML lexemes  
@@ -44,8 +56,15 @@ class Lexer {
     # Indentation of the current line   
     int indent = 0;
 
-    # Incremented when the lexer needs to be aware of the char count.
-    private int charCounter = 0;
+    # Store the lexeme if it will be scanned again by the next token
+    string lexemeBuffer = "";
+
+    # Represents the current context of the parser
+    Context context = BLOCK_OUT;
+
+    # Flag is enabled after a JSON key is detected.
+    # Used to generate mapping value even when it is possible to generate a planar scalar.
+    boolean isJsonKey = false;
 
     private map<string> escapedCharMap = {
         "0": "\u{00}",
@@ -81,15 +100,25 @@ class Lexer {
             return self.generateToken(LINE_BREAK);
         }
 
+        if self.peek() == "#" {
+            return self.generateToken(EOL);
+        }
+
         match self.state {
             LEXER_START => {
                 return check self.stateStart();
             }
+            LEXER_TAG_HANDLE => {
+                return check self.stateTagHandle();
+            }
             LEXER_TAG_PREFIX => {
                 return check self.stateTagPrefix();
             }
+            LEXER_TAG_NODE => {
+                return check self.stateTagNode();
+            }
             LEXER_DIRECTIVE => {
-                return check self.stateDirective();
+                return check self.stateYamlDirective();
             }
             LEXER_DOCUMENT_OUT => {
                 return check self.stateDocumentOut();
@@ -127,7 +156,7 @@ class Lexer {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
         }
 
-        return self.generateError(self.formatErrorMessage("double quotes flow style"));
+        return self.generateError(self.formatErrorMessage("double-quoted flow style"));
     }
 
     private function stateSingleQuote() returns Token|LexicalError {
@@ -160,10 +189,10 @@ class Lexer {
             return self.iterate(self.scanSingleQuotedChar, SINGLE_QUOTE_CHAR);
         }
 
-        return self.generateError(self.formatErrorMessage("single quote flow style"));
+        return self.generateError(self.formatErrorMessage("single-quoted flow style"));
     }
 
-    private function stateDirective() returns Token|LexicalError {
+    private function stateYamlDirective() returns Token|LexicalError {
         // Check for decimal digits
         if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
             return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
@@ -213,6 +242,10 @@ class Lexer {
             "." => {
                 return self.tokensInSequence("...", DOCUMENT_MARKER);
             }
+            "*" => {
+                self.forward();
+                return self.iterate(self.scanAnchorName, ALIAS);
+            }
             "%" => { // Directive line
                 self.forward();
                 match self.peek() {
@@ -227,46 +260,73 @@ class Lexer {
                     }
                 }
             }
-            "!" => {
+            "!" => { // Node tags
                 match self.peek(1) {
-                    " "|"\t" => { // Primary tag handle
-                        self.lexeme = "!";
-                        return self.generateToken(TAG_HANDLE);
+                    "<" => { // Verbatim tag
+                        self.forward(2);
+                        return self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], index = self.index + 1) ?
+                            self.iterate(self.scanURICharacter(true), TAG, true)
+                            : self.generateError(string `Expected a 'uri-char' after '<' in a 'verbatim tag'`);
                     }
-                    "!" => { // Secondary tag handle
+                    " "|"\t"|() => { // Non-specific tag
+                        self.lexeme = "!";
+                        self.forward();
+                        return self.generateToken(TAG);
+                    }
+                    "!" => { // Secondary tag handle 
                         self.lexeme = "!!";
                         self.forward();
                         return self.generateToken(TAG_HANDLE);
                     }
-                    () => {
-                        return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
-                    }
-                    _ => { // Check for named tag handles
+                    _ => { // Check for primary and name tag handles
                         self.lexeme = "!";
                         self.forward();
-                        return self.iterate(self.scanTagHandle, TAG_HANDLE, true);
+
+                        // Differentiate between primary and named tag
+                        return self.iterate(self.scanTagHandle(true), TAG_HANDLE, true);
                     }
                 }
+            }
+            "&" => {
+                self.forward();
+                return self.iterate(self.scanAnchorName, ANCHOR);
             }
             ":" => {
                 self.lexeme += ":";
-                self.forward();
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                    self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
+                return self.generateToken(MAPPING_VALUE);
             }
             "?" => {
                 self.lexeme += "?";
-                self.forward();
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                    self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
+                return self.generateToken(MAPPING_KEY);
             }
             "\"" => { // Process double quote flow style value
                 return self.generateToken(DOUBLE_QUOTE_DELIMITER);
             }
             "'" => {
                 return self.generateToken(SINGLE_QUOTE_DELIMITER);
+            }
+            "," => {
+                return self.generateToken(SEPARATOR);
+            }
+            "[" => {
+                return self.generateToken(SEQUENCE_START);
+            }
+            "]" => {
+                return self.generateToken(SEQUENCE_END);
+            }
+            "{" => {
+                return self.generateToken(MAPPING_START);
+            }
+            "}" => {
+                return self.generateToken(MAPPING_END);
             }
         }
 
@@ -277,39 +337,108 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("document prefix"));
     }
 
-    # Perform scanning for tag prefixes
-    #
-    # + return - The respective token on success. Else, an error.
-    private function stateTagPrefix() returns Token|LexicalError {
-
-        // Match the global prefix with tag pattern or local tag prefix
-        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
-        || self.peek() == "!") {
-            self.lexeme += <string>self.peek();
-            self.forward();
-            return self.iterate(self.scanURICharacter, TAG_PREFIX);
-        }
-
-        // Match the global prefix with hexadecimal value
-        if (self.peek() == "%") {
-            self.lexeme += "%";
-
-            // Match the first digit of the tag char
-            if (self.peek(1) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 1)) {
-                self.lexeme += self.line[self.index + 1];
-
-                // Match the second digit of the tag char
-                if (self.peek(2) != () && self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN, index = self.index + 2)) {
-                    self.lexeme += self.line[self.index + 2];
-                    self.forward(3);
-
-                    // Check for URI characters
-                    return self.iterate(self.scanURICharacter, TAG_PREFIX);
+    private function stateTagHandle() returns Token|LexicalError {
+        // Check fo primary, secondary, and named tag handles
+        if self.peek() == "!" {
+            match self.peek(1) {
+                " "|"\t" => { // Primary tag handle
+                    self.lexeme = "!";
+                    return self.generateToken(TAG_HANDLE);
+                }
+                "!" => { // Secondary tag handle
+                    self.lexeme = "!!";
+                    self.forward();
+                    return self.generateToken(TAG_HANDLE);
+                }
+                () => {
+                    return self.generateError(string `Expected a ${SEPARATION_IN_LINE} after primary tag handle`);
+                }
+                _ => { // Check for named tag handles
+                    self.lexeme = "!";
+                    self.forward();
+                    return self.iterate(self.scanTagHandle(), TAG_HANDLE, true);
                 }
             }
         }
 
+        // Check for separation-in-space before the tag prefix
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+        }
+
+        return self.generateError("Expected '!' to start the tag handle");
+    }
+
+    # Perform scanning for tag prefixes.
+    #
+    # + return - The respective token on success. Else, an error.
+    private function stateTagPrefix() returns Token|LexicalError {
+
+        // Match the global tag prefix or local tag prefix
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
+        || self.peek() == "!" {
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
+        }
+
+        // Match the global prefix with hexadecimal value
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            self.forward();
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
+        }
+
+        // Check for tail separation-in-line
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+        }
+
         return self.generateError(self.formatErrorMessage(TAG_PREFIX));
+    }
+
+    private function stateTagNode() returns Token|LexicalError {
+        // Check the lexeme buffer for the lexeme stored by the primary tag
+        if self.lexemeBuffer.length() > 0 {
+            self.lexeme = self.lexemeBuffer;
+            self.lexemeBuffer = "";
+
+            // The complete primary tag is stored in the buffer
+            if self.matchRegexPattern(WHITESPACE_PATTERN) {
+                self.forward(-1);
+                return self.generateToken(TAG);
+            }
+
+            // A first portion of the primary tag is stored in the buffer
+            if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
+                return self.iterate(self.scanTagCharacter, TAG);
+            }
+
+            return self.generateError(self.formatErrorMessage("primary tag"));
+        }
+
+        // Scan the anchor node
+        if self.peek() == "&" {
+            self.forward();
+            return self.iterate(self.scanAnchorName, ANCHOR);
+        }
+
+        // Match the tag with the t ag character pattern
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN]) {
+            return self.iterate(self.scanTagCharacter, TAG);
+        }
+
+        // Match the global prefix with hexadecimal value
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            self.forward();
+            return self.iterate(self.scanURICharacter(), TAG_PREFIX);
+        }
+
+        // Check for tail separation-in-line
+        if self.peek() == " " {
+            return check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+        }
+
+        return self.generateError(self.formatErrorMessage(TAG));
     }
 
     private function stateStart() returns Token|LexicalError {
@@ -331,10 +460,6 @@ class Lexer {
         }
 
         match self.peek() {
-            "&" => {
-                self.forward();
-                return self.iterate(self.scanAnchorName, ANCHOR);
-            }
             "*" => {
                 self.forward();
                 return self.iterate(self.scanAnchorName, ALIAS);
@@ -419,7 +544,7 @@ class Lexer {
 
     # Process the hex codes under the unicode escaped character.
     #
-    # + escapedChar - Escaped character before the digits  
+    # + escapedChar - Escaped character before the digits. Only used to present in the error message.
     # + length - Number of digits
     # + return - An error on failure
     private function scanUnicodeEscapedCharacters(string escapedChar, int length) returns LexicalError? {
@@ -514,15 +639,16 @@ class Lexer {
             self.forward();
         }
 
-        // Check if EOL is reached
+        // Step back from the white spaces if EOL or ':' is reached 
         if self.peek() == () {
             self.forward(-numWhitespace);
             return true;
         }
 
         // Process ns-plain-safe character
-        //TODO: exclude flow indicator where necessary
-        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+        if self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
+        [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN, "#", ":"]
+        : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
             self.lexeme += whitespace + <string>self.peek();
             return false;
         }
@@ -530,6 +656,7 @@ class Lexer {
         // Check for comments with a space before it
         if self.peek() == "#" {
             if self.peek(-1) == " " {
+                self.forward(-numWhitespace);
                 return true;
             }
             self.lexeme += whitespace + "#";
@@ -538,7 +665,8 @@ class Lexer {
 
         // Check for mapping value with a space after it 
         if self.peek() == ":" {
-            if self.peek() == " " {
+            if self.peek(1) == " " {
+                self.forward(-numWhitespace);
                 return true;
             }
             self.lexeme += whitespace + ":";
@@ -555,59 +683,106 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
     }
 
-    # Scan the lexeme for URI characters
+    # Scan the lexeme for tag characters.
     #
     # + return - False to continue. True to terminate the token. An error on failure.
-    private function scanURICharacter() returns boolean|LexicalError {
-
-        // Check for URI characters
-        if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN])) {
+    private function scanTagCharacter() returns boolean|LexicalError {
+        // Check for URI character
+        if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
             self.lexeme += <string>self.peek();
             return false;
         }
 
-        // Check for hexadecimal values
-        if self.peek() == "%" {
-            if (self.charCounter > 1 && self.charCounter < 4) {
-                return self.generateError("Must have 2 digits for a hexadecimal in URI");
-            }
-            self.lexeme += "%";
-            self.charCounter += 1;
-            return false;
-        }
-
-        //  
-        if (self.matchRegexPattern(HEXADECIMAL_DIGIT_PATTERN) && self.charCounter > 1 && self.charCounter < 4) {
-            self.lexeme += <string>self.peek();
-            self.charCounter += 1;
-            return false;
-        }
-
-        // Ignore the comments
-        if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
-            return false;
-        }
-
-        return self.generateError(self.formatErrorMessage(TAG_PREFIX));
-    }
-
-    # Description
-    #
-    # + return - False to continue. True to terminate the token. An error on failure.
-    private function scanTagHandle() returns boolean|LexicalError {
-
-        // Scan the word of the name tag.
-        if (self.matchRegexPattern(WORD_PATTERN)) {
-            self.lexeme += <string>self.peek();
-            return false;
-        }
-
-        // Scan the end delimiter of the tag.
-        if self.peek() == "!" {
-            self.lexeme += "!";
+        if self.matchRegexPattern(WHITESPACE_PATTERN) {
             return true;
         }
-        return self.generateError(self.formatErrorMessage(TAG_HANDLE));
+
+        // Process the hexadecimal values after '%'
+        if self.peek() == "%" {
+            check self.scanUnicodeEscapedCharacters("%", 2);
+            return false;
+        }
+
+        return self.generateError(self.formatErrorMessage(TAG));
+    }
+
+    # Scan the lexeme for URI characters
+    #
+    # + isVerbatim - If set, terminates when ">" is detected.
+    # + return - Generates a function to scan the URI characters.
+    private function scanURICharacter(boolean isVerbatim = false) returns function () returns boolean|LexicalError {
+        return function() returns boolean|LexicalError {
+            // Check for URI characters
+            if (self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN])) {
+                self.lexeme += <string>self.peek();
+                return false;
+            }
+
+            // Process the hexadecimal values after '%'
+            if self.peek() == "%" {
+                check self.scanUnicodeEscapedCharacters("%", 2);
+                return false;
+            }
+
+            // Ignore the comments
+            if self.matchRegexPattern([LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
+                return true;
+            }
+
+            // Terminate when '>' is detected for a verbatim tag
+            if isVerbatim && self.peek() == ">" {
+                return true;
+            }
+
+            return self.generateError(self.formatErrorMessage("URI character"));
+        };
+    }
+
+    # Scan the lexeme for named tag handle.
+    #
+    # + differentiate - If set, the function handles to differentiate between named and primary tags.
+    # + return - Generates a function to scan the lexeme of a named or primary tag handle.
+    private function scanTagHandle(boolean differentiate = false) returns function () returns boolean|LexicalError {
+        return function() returns boolean|LexicalError {
+            // Scan the word of the name tag.
+            if (self.matchRegexPattern(WORD_PATTERN)) {
+                self.lexeme += <string>self.peek();
+                return false;
+            }
+
+            // Scan the end delimiter of the tag.
+            if self.peek() == "!" {
+                self.lexeme += "!";
+                return true;
+            }
+
+            // If the tag handle contains non-word character before '!', 
+            // Then the tag is primary
+            if differentiate && self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], FLOW_INDICATOR_PATTERN) {
+                self.lexemeBuffer = self.lexeme.substring(1) + <string>self.peek();
+                self.lexeme = "!";
+                return true;
+            }
+
+            // If the tag handle contains a hexadecimal escape,
+            // Then the tag is primary
+            if differentiate && self.peek() == "%" {
+                check self.scanUnicodeEscapedCharacters("%", 2);
+                self.lexemeBuffer = self.lexeme.substring(1);
+                self.lexeme = "!";
+                return true;
+            }
+
+            // Store the complete primary tag if a white space is detected
+            if differentiate && self.matchRegexPattern(WHITESPACE_PATTERN) {
+                self.forward(-1);
+                self.lexemeBuffer = self.lexeme.substring(1);
+                self.lexeme = "!";
+                return true;
+            }
+
+            return self.generateError(self.formatErrorMessage(TAG_HANDLE));
+        };
     }
 
     # Scan the lexeme for the anchor name.
@@ -631,6 +806,7 @@ class Lexer {
         }
         return true;
     }
+
     # Check for the lexemes to crete an DECIMAL token.
     #
     # + digitPattern - Regex pattern of the number system
