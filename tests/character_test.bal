@@ -18,6 +18,8 @@ function indicatorDataGen() returns map<[string, YAMLToken]> {
         "sequence-start": ["[", SEQUENCE_START],
         "sequence-end": ["]", SEQUENCE_END],
         "mapping-start": ["{", MAPPING_START],
+        "folding": [">", FOLDED],
+        "literal": ["|", LITERAL],
         "mapping-end": ["}", MAPPING_END]
     };
 }

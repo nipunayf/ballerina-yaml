@@ -25,7 +25,8 @@ enum State {
     LEXER_DIRECTIVE,
     LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
-    LEXER_SINGLE_QUOTE
+    LEXER_SINGLE_QUOTE,
+    LEXER_BLOCK_HEADER
 }
 
 # Represents the different contexts of the Lexer introduced in the YAML specification.
@@ -128,6 +129,9 @@ class Lexer {
             }
             LEXER_SINGLE_QUOTE => {
                 return check self.stateSingleQuote();
+            }
+            LEXER_BLOCK_HEADER => {
+                return check self.stateBlockHeader();
             }
             _ => {
                 return self.generateError("Invalid state");
@@ -328,6 +332,12 @@ class Lexer {
             "}" => {
                 return self.generateToken(MAPPING_END);
             }
+            "|" => { // Literal block scalar
+                return self.generateToken(LITERAL);
+            }
+            ">" => { // Folded block scalar
+                return self.generateToken(FOLDED);
+            }
         }
 
         // Check for first character of planar scalar
@@ -441,6 +451,22 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(TAG));
     }
 
+    private function stateBlockHeader() returns Token|LexicalError {
+        // Check for indentation indicators
+        if self.matchRegexPattern("1-9") {
+            self.lexeme = <string>self.peek();
+            return self.generateToken(INDENTATION_INDICATOR);
+        }
+        
+        // Check for chomping indicators
+        if self.checkCharacter(["+", "-"]) {
+            self.lexeme = <string>self.peek();
+            return self.generateToken(CHOMPING_INDICATOR);
+        }
+
+        return self.generateError(self.formatErrorMessage("<block-header>"));
+    }
+
     private function stateStart() returns Token|LexicalError {
 
         match self.peek() {
@@ -466,12 +492,6 @@ class Lexer {
             }
             "-" => {
                 return self.generateToken(SEQUENCE_ENTRY);
-            }
-            "|" => { // Literal block scalar
-                return self.generateToken(LITERAL);
-            }
-            ">" => { // Folded block scalar
-                return self.generateToken(FOLDED);
             }
             "?" => {
                 return self.generateToken(MAPPING_KEY);
