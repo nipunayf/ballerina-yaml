@@ -40,7 +40,7 @@ function testAliasToken() returns error? {
 function testSeparationSpacesToken() returns error? {
     Lexer lexer = setLexerString("  1");
     check assertToken(lexer, SEPARATION_IN_LINE);
-    check assertToken(lexer, DECIMAL, lexeme = "1");
+    check assertToken(lexer, PLANAR_CHAR, lexeme = "1");
 }
 
 @test:Config {}
@@ -70,7 +70,7 @@ function lineFoldingDataGen() returns map<[string[], string]> {
     dataProvider: nodeTagDataGen
 }
 function testNodeTagToken(string line, string value) returns error? {
-    Lexer lexer = setLexerString(line, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(line);
     check assertToken(lexer, TAG, lexeme = value);
 }
 
@@ -85,16 +85,15 @@ function nodeTagDataGen() returns map<[string, string]> {
 @test:Config {
     dataProvider: invalidNodeTagDataGen
 }
-function testInvalidNodeTagToken(string line) returns error? {
-    assertLexicalError(line);
+function testInvalidNodeTagToken(string line, boolean isLexical) returns error? {
+    check assertParsingError(line, isLexical);
 }
 
-function invalidNodeTagDataGen() returns map<[string]> {
+function invalidNodeTagDataGen() returns map<[string, boolean]> {
     return {
-        "verbatim primary": ["!<!>"],
-        "verbatim empty": ["!<>"],
-        "verbatim invalid": ["!<$:?>"],
-        "tag-shorthand no-suffix": ["!e!"]
+        "verbatim primary": ["!<!>", true],
+        "verbatim empty": ["!<>", true],
+        "tag-shorthand no-suffix": ["!e!", false]
     };
 }
 

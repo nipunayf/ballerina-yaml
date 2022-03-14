@@ -23,7 +23,6 @@ enum State {
     LEXER_TAG_PREFIX,
     LEXER_TAG_NODE,
     LEXER_DIRECTIVE,
-    LEXER_DOCUMENT_OUT,
     LEXER_DOUBLE_QUOTE,
     LEXER_SINGLE_QUOTE,
     LEXER_BLOCK_HEADER
@@ -121,9 +120,6 @@ class Lexer {
             LEXER_DIRECTIVE => {
                 return check self.stateYamlDirective();
             }
-            LEXER_DOCUMENT_OUT => {
-                return check self.stateDocumentOut();
-            }
             LEXER_DOUBLE_QUOTE => {
                 return check self.stateDoubleQuote();
             }
@@ -210,7 +206,7 @@ class Lexer {
         return self.generateError(self.formatErrorMessage("version number"));
     }
 
-    private function stateDocumentOut() returns Token|LexicalError {
+    private function stateStart() returns Token|LexicalError {
         match self.peek() {
             " " => {
                 // Return empty line if there is only whitespace
@@ -237,11 +233,14 @@ class Lexer {
                 }
 
                 // Scan for planar characters
-                self.lexeme += "-";
-                self.forward();
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN]) {
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+                    self.forward();
+                    self.lexeme += "-";
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
+
+                // Return block sequence entry
+                return self.generateToken(SEQUENCE_ENTRY);
             }
             "." => {
                 return self.tokensInSequence("...", DOCUMENT_MARKER);
@@ -268,9 +267,14 @@ class Lexer {
                 match self.peek(1) {
                     "<" => { // Verbatim tag
                         self.forward(2);
-                        return self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], index = self.index + 1) ?
+
+                        if self.peek() == "!" && self.peek(1) == ">" {
+                            return self.generateError("'verbatim tag' are not resolved. Hence, '!' is invalid");
+                        }
+
+                        return self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN]) ?
                             self.iterate(self.scanURICharacter(true), TAG, true)
-                            : self.generateError(string `Expected a 'uri-char' after '<' in a 'verbatim tag'`);
+                            : self.generateError("Expected a 'uri-char' after '<' in a 'verbatim tag'");
                     }
                     " "|"\t"|() => { // Non-specific tag
                         self.lexeme = "!";
@@ -297,7 +301,7 @@ class Lexer {
             }
             ":" => {
                 self.lexeme += ":";
-                if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
@@ -305,7 +309,7 @@ class Lexer {
             }
             "?" => {
                 self.lexeme += "?";
-                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], self.index + 1) {
+                if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
@@ -457,7 +461,7 @@ class Lexer {
             self.lexeme = <string>self.peek();
             return self.generateToken(INDENTATION_INDICATOR);
         }
-        
+
         // Check for chomping indicators
         if self.checkCharacter(["+", "-"]) {
             self.lexeme = <string>self.peek();
@@ -465,62 +469,6 @@ class Lexer {
         }
 
         return self.generateError(self.formatErrorMessage("<block-header>"));
-    }
-
-    private function stateStart() returns Token|LexicalError {
-
-        match self.peek() {
-            " " => {
-                // Return empty line if there is only whitespace
-                // Else, return separation in line
-                Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                return self.peek() == () ? self.generateToken(EMPTY_LINE) : token;
-            }
-            "#" => { // Ignore comments
-                return self.generateToken(EOL);
-            }
-        }
-
-        if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
-            return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
-        }
-
-        match self.peek() {
-            "*" => {
-                self.forward();
-                return self.iterate(self.scanAnchorName, ALIAS);
-            }
-            "-" => {
-                return self.generateToken(SEQUENCE_ENTRY);
-            }
-            "?" => {
-                return self.generateToken(MAPPING_KEY);
-            }
-            ":" => {
-                return self.generateToken(MAPPING_VALUE);
-            }
-            "," => {
-                return self.generateToken(SEPARATOR);
-            }
-            "[" => {
-                return self.generateToken(SEQUENCE_START);
-            }
-            "]" => {
-                return self.generateToken(SEQUENCE_END);
-            }
-            "{" => {
-                return self.generateToken(MAPPING_START);
-            }
-            "}" => {
-                return self.generateToken(MAPPING_END);
-            }
-            "." => {
-                return self.generateToken(DOT);
-            }
-
-        }
-
-        return self.generateError(self.formatErrorMessage("indicator"));
     }
 
     # Scan lexemes for the escaped characters.
@@ -889,17 +837,22 @@ class Lexer {
     # Check if the given character matches the regex pattern.
     #
     # + inclusionPatterns - Included the regex patterns
-    # + index - Index of the character. Default = self.index  
+    # + offset - Offset of the character from the current index. Default = 0  
     # + exclusionPatterns - Exclude the regex patterns
     # + return - True if the pattern matches
-    private function matchRegexPattern(string|string[] inclusionPatterns, string|string[]? exclusionPatterns = (), int? index = ()) returns boolean {
+    private function matchRegexPattern(string|string[] inclusionPatterns, string|string[]? exclusionPatterns = (), int offset = 0) returns boolean {
+        // If there is no character to check the pattern, then return false.
+        if self.peek(offset) == () {
+            return false;
+        }
+
         string inclusionPattern = "[" + self.concatenateStringArray(inclusionPatterns) + "]";
         string exclusionPattern = "";
 
         if (exclusionPatterns != ()) {
             exclusionPattern = "(?![" + self.concatenateStringArray(exclusionPatterns) + "])";
         }
-        return regex:matches(self.line[index == () ? self.index : index], exclusionPattern + inclusionPattern + "{1}");
+        return regex:matches(self.line[self.index + offset], exclusionPattern + inclusionPattern + "{1}");
     }
 
     # Concatenate one or more strings.

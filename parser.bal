@@ -39,7 +39,7 @@ class Parser {
     #
     # + return - Lexical or parsing error on failure
     public function parse() returns Event|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
         check self.checkToken();
 
         // Ignore the whitespace at the head
@@ -408,7 +408,7 @@ class Parser {
     }
 
     private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
 
         if !peeked {
             check self.checkToken();
@@ -439,7 +439,7 @@ class Parser {
     }
 
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
 
         // Only separation-in-line is considered for keys

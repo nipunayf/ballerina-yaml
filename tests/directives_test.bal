@@ -5,7 +5,7 @@ import ballerina/test;
     groups: ["directives"]
 }
 function testDirectivesToken(string lexeme, string value) returns error? {
-    Lexer lexer = setLexerString(lexeme, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(lexeme);
     check assertToken(lexer, DIRECTIVE, lexeme = value);
 }
 
@@ -100,7 +100,7 @@ function invalidUriHexDataGen() returns map<[string]> {
 
 @test:Config {}
 function testTagDuplicates() returns error? {
-    check assertParsingError(["%TAG !a! firstprefix ", "%TAG !a! secondprefix "]);
+    check assertParsingError(["%TAG !a! firstPrefix ", "%TAG !a! secondPrefix "]);
 }
 
 @test:Config {
