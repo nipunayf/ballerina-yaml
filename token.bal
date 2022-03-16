@@ -37,9 +37,11 @@ enum YAMLToken {
     SINGLE_QUOTE_DELIMITER = "'",
     SINGLE_QUOTE_CHAR,
     PLANAR_CHAR,
+    PRINTABLE_CHAR,
     INDENTATION_INDICATOR = "<indentation-indicator>",
     CHOMPING_INDICATOR = "<chomping-indicator>",
     EMPTY_LINE,
     EOL,
+    TRAILING_COMMENT = "<trailing-comment>",
     DUMMY
 }

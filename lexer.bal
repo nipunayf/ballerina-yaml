@@ -25,7 +25,8 @@ enum State {
     LEXER_DIRECTIVE,
     LEXER_DOUBLE_QUOTE,
     LEXER_SINGLE_QUOTE,
-    LEXER_BLOCK_HEADER
+    LEXER_BLOCK_HEADER,
+    LEXER_LITERAL
 }
 
 # Represents the different contexts of the Lexer introduced in the YAML specification.
@@ -53,7 +54,10 @@ class Lexer {
     # Current state of the Lexer
     State state = LEXER_START;
 
-    # Indentation of the current line   
+    # Minimum indentation imposed by the parent node
+    int[] indents = [];
+
+    # Minimum indentation required to the current line
     int indent = 0;
 
     # Store the lexeme if it will be scanned again by the next token
@@ -65,6 +69,9 @@ class Lexer {
     # Flag is enabled after a JSON key is detected.
     # Used to generate mapping value even when it is possible to generate a planar scalar.
     boolean isJsonKey = false;
+
+    # The lexer is currently processing trailing comments when the flag is set.
+    boolean trailingComment = false;
 
     private map<string> escapedCharMap = {
         "0": "\u{00}",
@@ -100,34 +107,33 @@ class Lexer {
             return self.generateToken(LINE_BREAK);
         }
 
-        if self.peek() == "#" {
-            return self.generateToken(EOL);
-        }
-
         match self.state {
             LEXER_START => {
-                return check self.stateStart();
+                return self.stateStart();
             }
             LEXER_TAG_HANDLE => {
-                return check self.stateTagHandle();
+                return self.stateTagHandle();
             }
             LEXER_TAG_PREFIX => {
-                return check self.stateTagPrefix();
+                return self.stateTagPrefix();
             }
             LEXER_TAG_NODE => {
-                return check self.stateTagNode();
+                return self.stateTagNode();
             }
             LEXER_DIRECTIVE => {
-                return check self.stateYamlDirective();
+                return self.stateYamlDirective();
             }
             LEXER_DOUBLE_QUOTE => {
-                return check self.stateDoubleQuote();
+                return self.stateDoubleQuote();
             }
             LEXER_SINGLE_QUOTE => {
-                return check self.stateSingleQuote();
+                return self.stateSingleQuote();
             }
             LEXER_BLOCK_HEADER => {
-                return check self.stateBlockHeader();
+                return self.stateBlockHeader();
+            }
+            LEXER_LITERAL => {
+                return self.stateLiteral();
             }
             _ => {
                 return self.generateError("Invalid state");
@@ -193,6 +199,11 @@ class Lexer {
     }
 
     private function stateYamlDirective() returns Token|LexicalError {
+        // Ignore any comments
+        if self.peek() == "#" {
+            return self.generateToken(EOL);
+        }
+
         // Check for decimal digits
         if (self.matchRegexPattern(DECIMAL_DIGIT_PATTERN)) {
             return self.iterate(self.scanDigit(DECIMAL_DIGIT_PATTERN), DECIMAL);
@@ -337,9 +348,11 @@ class Lexer {
                 return self.generateToken(MAPPING_END);
             }
             "|" => { // Literal block scalar
+                self.indent += 1;
                 return self.generateToken(LITERAL);
             }
             ">" => { // Folded block scalar
+                self.indent += 1;
                 return self.generateToken(FOLDED);
             }
         }
@@ -352,6 +365,11 @@ class Lexer {
     }
 
     private function stateTagHandle() returns Token|LexicalError {
+        // Ignore any comments
+        if self.peek() == "#" {
+            return self.generateToken(EOL);
+        }
+
         // Check fo primary, secondary, and named tag handles
         if self.peek() == "!" {
             match self.peek(1) {
@@ -387,6 +405,10 @@ class Lexer {
     #
     # + return - The respective token on success. Else, an error.
     private function stateTagPrefix() returns Token|LexicalError {
+        // Ignore any comments
+        if self.peek() == "#" {
+            return self.generateToken(EOL);
+        }
 
         // Match the global tag prefix or local tag prefix
         if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], exclusionPatterns = ["!", FLOW_INDICATOR_PATTERN])
@@ -456,10 +478,16 @@ class Lexer {
     }
 
     private function stateBlockHeader() returns Token|LexicalError {
-        // Check for indentation indicators
+        // Check for indentation indicators and adjust the current indent
         if self.matchRegexPattern("1-9") {
-            self.lexeme = <string>self.peek();
-            return self.generateToken(INDENTATION_INDICATOR);
+            int indentationIndicator = <int>(check self.processTypeCastingError('int:fromString(<string>self.peek()))) - 1;
+            self.indent += indentationIndicator;
+            self.forward();
+        }
+
+        // If the indentation indicator is at the tail
+        if (self.index >= self.line.length()) {
+            return self.generateToken(EOL);
         }
 
         // Check for chomping indicators
@@ -469,6 +497,50 @@ class Lexer {
         }
 
         return self.generateError(self.formatErrorMessage("<block-header>"));
+    }
+
+    private function stateLiteral() returns Token|LexicalError {
+        // Check for comments in trailing comments
+        if self.trailingComment {
+            match self.peek() {
+                " " => {
+                    _ = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+                    self.forward();
+                    match self.peek() {
+                        "#" => { // New line comments are allowed in trailing comments
+                            return self.generateToken(EOL);
+                        }
+                        () => { // Empty lines are allowed in trailing comments
+                            return self.generateToken(EMPTY_LINE);
+                        }
+                        _ => { // Any other characters are not allowed
+                            return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
+                        }
+                    }
+                }
+                "#" => { // New line comments are allowed in trailing comments
+                    return self.generateToken(EOL);
+                }
+                _ => { // Any other characters are not allowed
+                    return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
+                }
+            }
+        }
+
+        // There is no sufficient indent to consider printable characters
+        if !self.scanIndent() {
+            // Generate beginning of the trailing comment
+            return self.peek() == "#" ? self.generateToken(TRAILING_COMMENT)
+                //Other characters are not allowed when the indentation is less
+                : self.generateError("Insufficient indent to process literal characters");
+        }
+
+        // Scan printable character
+        if self.matchRegexPattern(PRINTABLE_PATTERN, [BOM_PATTERN, LINE_BREAK_PATTERN]) {
+            return self.iterate(self.scanPrintableChar, PRINTABLE_CHAR);
+        }
+
+        return self.generateError(self.formatErrorMessage(LITERAL));
     }
 
     # Scan lexemes for the escaped characters.
@@ -651,6 +723,15 @@ class Lexer {
         return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
     }
 
+    private function scanPrintableChar() returns boolean|LexicalError {
+        if self.matchRegexPattern(PRINTABLE_PATTERN, [BOM_PATTERN, LINE_BREAK_PATTERN]) {
+            self.lexeme += <string>self.peek();
+            return false;
+        }
+
+        return true;
+    }
+
     # Scan the lexeme for tag characters.
     #
     # + return - False to continue. True to terminate the token. An error on failure.
@@ -771,6 +852,21 @@ class Lexer {
         if self.peek() == " " {
             self.lexeme += " ";
             return false;
+        }
+        return true;
+    }
+
+    # Scan the whitespace to build an indent.
+    #
+    # + n - Number of whitespace for the indent.
+    # + return - Returns true if there are sufficient whitespace to build the indent.
+    private function scanIndent(int? n = ()) returns boolean {
+        int upperLimit = n == () ? self.indent : n;
+        foreach int i in 1 ... upperLimit {
+            if !(self.peek() == " ") {
+                return false;
+            }
+            self.forward();
         }
         return true;
     }
@@ -929,6 +1025,20 @@ class Lexer {
                         + message
                         + ".";
         return error LexicalError(text);
+    }
+
+    # Check errors during type casting to Ballerina types.
+    #
+    # + value - Value to be type casted.
+    # + return - Value as a Ballerina data type  
+    private function processTypeCastingError(anydata|error value) returns anydata|LexicalError {
+        // Check if the type casting has any errors
+        if value is error {
+            return self.generateError("Invalid value for assignment");
+        }
+
+        // Returns the value on success
+        return value;
     }
 
     # Generate the template error message "Invalid character '${char}' for a '${token}'"

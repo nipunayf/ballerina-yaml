@@ -178,6 +178,11 @@ class Parser {
             MAPPING_END => {
                 return {endType: MAPPING};
             }
+            LITERAL => {
+                self.lexer.state = LEXER_LITERAL;
+                string value = check self.literal();
+                return {value};
+            }
         }
         return self.generateError(string `Invalid token '${self.currentToken.token}' as the first for generating an event`);
     }
@@ -395,6 +400,91 @@ class Parser {
             check self.checkToken();
         }
         return lexemeBuffer;
+    }
+
+    private function literal() returns ParsingError|LexicalError|string {
+        string chompingIndicator = check self.chompingIndicator();
+
+        self.lexer.state = LEXER_LITERAL;
+        string lexemeBuffer = "";
+
+        check self.checkToken();
+
+        while true {
+            match self.currentToken.token {
+                PRINTABLE_CHAR => {
+                    lexemeBuffer += self.currentToken.value;
+                }
+                EOL => {
+                    // Terminate at the end of the line
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer();
+                }
+                EMPTY_LINE => {
+                    lexemeBuffer += "\n";
+                }
+                TRAILING_COMMENT => {
+                    self.lexer.trailingComment = true;
+                    check self.initLexer();
+
+                    // Ignore the tokens inside trailing comments
+                    while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+                        // Terminate at the end of the line
+                        if self.lineIndex == self.numLines - 1 {
+                            break;
+                        }
+                        check self.initLexer();
+                    }
+
+                    self.lexer.trailingComment = false;
+                    break;
+                }
+                _ => { // Break the character when the token does not belong to planar scalar
+                    break;
+                }
+            }
+            check self.checkToken();
+        }
+
+        // Adjust the tail based on the chomping values
+        match chompingIndicator {
+            "-" => {
+                //TODO: trim trailing newlines
+            }
+            "+" => {
+
+            }
+            "=" => {
+                //TODO: trim trailing newlines
+                lexemeBuffer += "\n";
+            }
+        }
+
+        return lexemeBuffer;
+    }
+
+    private function chompingIndicator() returns string|LexicalError|ParsingError {
+        self.lexer.state = LEXER_BLOCK_HEADER;
+        check self.checkToken();
+
+        // Scan for block-header
+        match self.currentToken.token {
+            CHOMPING_INDICATOR => { // Strip and keep chomping indicators
+                string chompingIndicator = self.currentToken.value;
+                check self.checkToken(EOL);
+                check self.initLexer();
+                return chompingIndicator;
+            }
+            EOL => { // Clip chomping indicator
+                check self.initLexer();
+                return "=";
+            }
+            _ => { // Any other characters are not allowed
+                return self.generateError(check self.formatErrorMessage(1, CHOMPING_INDICATOR, self.currentToken.token));
+            }
+        }
     }
 
     private function dataNode(boolean peeked = false) returns map<anydata>|LexicalError|ParsingError {
