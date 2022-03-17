@@ -5,7 +5,7 @@ import ballerina/test;
 }
 
 function testDocumentMarkerToken(string lexeme, YAMLToken token) returns error? {
-    Lexer lexer = setLexerString(lexeme, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(lexeme);
     check assertToken(lexer, token);
 }
 

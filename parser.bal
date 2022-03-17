@@ -39,7 +39,7 @@ class Parser {
     #
     # + return - Lexical or parsing error on failure
     public function parse() returns Event|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
         check self.checkToken();
 
         // Ignore the whitespace at the head
@@ -177,6 +177,11 @@ class Parser {
             }
             MAPPING_END => {
                 return {endType: MAPPING};
+            }
+            LITERAL => {
+                self.lexer.state = LEXER_LITERAL;
+                string value = check self.literal();
+                return {value};
             }
         }
         return self.generateError(string `Invalid token '${self.currentToken.token}' as the first for generating an event`);
@@ -397,6 +402,112 @@ class Parser {
         return lexemeBuffer;
     }
 
+    private function literal() returns ParsingError|LexicalError|string {
+        string chompingIndicator = check self.chompingIndicator();
+
+        self.lexer.state = LEXER_LITERAL;
+        string lexemeBuffer = "";
+        string newLineBuffer = "";
+        boolean isFirstLine = true;
+
+        check self.checkToken();
+
+        while true {
+            match self.currentToken.token {
+                PRINTABLE_CHAR => {
+                    if !isFirstLine {
+                        lexemeBuffer += newLineBuffer + "\n";
+                        newLineBuffer = "";
+                    }
+                    lexemeBuffer += self.currentToken.value;
+                    isFirstLine = false;
+                }
+                EOL => {
+                    // Terminate at the end of the line
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer();
+                }
+                EMPTY_LINE => {
+                    if !isFirstLine {
+                        newLineBuffer += "\n";
+                    }
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer();
+                    isFirstLine = false;
+                }
+                TRAILING_COMMENT => {
+                    self.lexer.trailingComment = true;
+                    // Terminate at the end of the line
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer();
+                    check self.checkToken();
+
+                    // Ignore the tokens inside trailing comments
+                    while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+                        // Terminate at the end of the line
+                        if self.lineIndex == self.numLines - 1 {
+                            break;
+                        }
+                        check self.initLexer();
+                        check self.checkToken();
+                    }
+
+                    self.lexer.trailingComment = false;
+                    break;
+                }
+                _ => { // Break the character when the token does not belong to planar scalar
+                    break;
+                }
+            }
+            check self.checkToken();
+        }
+
+        // Adjust the tail based on the chomping values
+        match chompingIndicator {
+            "-" => {
+                //TODO: trim trailing newlines
+            }
+            "+" => {
+                lexemeBuffer += "\n";
+                lexemeBuffer += newLineBuffer;
+            }
+            "=" => {
+                //TODO: trim trailing newlines
+                lexemeBuffer += "\n";
+            }
+        }
+
+        return lexemeBuffer;
+    }
+
+    private function chompingIndicator() returns string|LexicalError|ParsingError {
+        self.lexer.state = LEXER_BLOCK_HEADER;
+        check self.checkToken();
+
+        // Scan for block-header
+        match self.currentToken.token {
+            CHOMPING_INDICATOR => { // Strip and keep chomping indicators
+                string chompingIndicator = self.currentToken.value;
+                check self.checkToken(EOL);
+                check self.initLexer();
+                return chompingIndicator;
+            }
+            EOL => { // Clip chomping indicator
+                check self.initLexer();
+                return "=";
+            }
+            _ => { // Any other characters are not allowed
+                return self.generateError(check self.formatErrorMessage(1, CHOMPING_INDICATOR, self.currentToken.token));
+            }
+        }
+    }
+
     private function dataNode(boolean peeked = false) returns map<anydata>|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
@@ -408,7 +519,7 @@ class Parser {
     }
 
     private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
 
         if !peeked {
             check self.checkToken();
@@ -439,7 +550,7 @@ class Parser {
     }
 
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
-        self.lexer.state = LEXER_DOCUMENT_OUT;
+        self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
 
         // Only separation-in-line is considered for keys

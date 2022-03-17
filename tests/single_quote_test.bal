@@ -20,7 +20,7 @@ function singleQuoteDataGen() returns map<[string[], string]> {
     dataProvider: planarDataGen
 }
 function testPlanarToken(string line, string lexeme) returns error? {
-    Lexer lexer = setLexerString(line, LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString(line);
     check assertToken(lexer, PLANAR_CHAR, lexeme = lexeme);
 }
 
@@ -38,7 +38,7 @@ function planarDataGen() returns map<[string, string]> {
 
 @test:Config {}
 function testSeparateInLineAfterPlanar() returns error? {
-    Lexer lexer = setLexerString("planar space      ", LEXER_DOCUMENT_OUT);
+    Lexer lexer = setLexerString("planar space      ");
     check assertToken(lexer, PLANAR_CHAR, lexeme = "planar space");
     check assertToken(lexer, SEPARATION_IN_LINE);
 }

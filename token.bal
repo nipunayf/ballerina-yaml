@@ -25,8 +25,8 @@ enum YAMLToken {
     TAG = "<tag>",
     DOT = ".",
     SCALAR = "<scalar>",
-    LITERAL,
-    FOLDED,
+    LITERAL = "|",
+    FOLDED = ">",
     DECIMAL = "<decimal-integer>",
     SEPARATION_IN_LINE = "<separation-in-line>",
     LINE_BREAK = "<break>",
@@ -37,7 +37,11 @@ enum YAMLToken {
     SINGLE_QUOTE_DELIMITER = "'",
     SINGLE_QUOTE_CHAR,
     PLANAR_CHAR,
+    PRINTABLE_CHAR,
+    INDENTATION_INDICATOR = "<indentation-indicator>",
+    CHOMPING_INDICATOR = "<chomping-indicator>",
     EMPTY_LINE,
     EOL,
+    TRAILING_COMMENT = "<trailing-comment>",
     DUMMY
 }
