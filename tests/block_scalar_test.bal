@@ -29,13 +29,13 @@ function blockScalarEventDataGen() returns map<[string[], string]> {
         "capture indented comment": [["|-", " # comment", "# trailing comment"], "# comment"],
         "trailing-lines strip": [["|-", " value", "", " "], "value"],
         "trailing-lines clip": [["|", " value", "", " "], "value\n"],
-        "trailing-lines keep": [["|+", " value", "", " "], "value\n\n\n"]
-        // "empty strip": [["|-", ""], ""],
-        // "empty clip": [["|", ""], ""],
-        // "empty keep": [["|+", ""], "\n"],
-        // "line-break strip": [["|-", " text"], ""],
-        // "line-break clip": [["|", " text"], "\n"],
-        // "line-break keep": [["|+", " text"], "\n"]
+        "trailing-lines keep": [["|+", " value", "", " "], "value\n\n\n"],
+        "empty strip": [["|-", ""], ""],
+        "empty clip": [["|", ""], ""],
+        "empty keep": [["|+", ""], "\n"],
+        "line-break strip": [["|-", " text"], "text"],
+        "line-break clip": [["|", " text"], "text\n"],
+        "line-break keep": [["|+", " text"], "text\n"]
     };
 }
 

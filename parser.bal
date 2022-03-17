@@ -430,14 +430,18 @@ class Parser {
                     check self.initLexer();
                 }
                 EMPTY_LINE => {
-                    newLineBuffer += "\n";
+                    if !isFirstLine {
+                        newLineBuffer += "\n";
+                    }
                     if self.lineIndex == self.numLines - 1 {
                         break;
                     }
                     check self.initLexer();
+                    isFirstLine = false;
                 }
                 TRAILING_COMMENT => {
                     self.lexer.trailingComment = true;
+                    // Terminate at the end of the line
                     if self.lineIndex == self.numLines - 1 {
                         break;
                     }
