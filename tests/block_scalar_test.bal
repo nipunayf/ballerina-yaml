@@ -25,8 +25,8 @@ function testBlockScalarEvent(string[] lines, string value) returns error? {
 function blockScalarEventDataGen() returns map<[string[], string]> {
     return {
         "correct indentation for indentation-indicator": [["|2", "  value"], "value\n"],
-        "ignore trailing comment": [["|-", "  value", "# trailing comment", " #  trailing comment"], " value"]
-        // "capture indented comment": [["|-", " # comment", "# trailing comment"], "# comment"],
+        "ignore trailing comment": [["|-", "  value", "# trailing comment", " #  trailing comment"], " value"],
+        "capture indented comment": [["|-", " # comment", "# trailing comment"], "# comment"]
         // "trailing-lines strip": [["|-", " value", "", " "], "value"],
         // "trailing-lines clip": [["|", " value", "", " "], "value\n"],
         // "trailing-lines keep": [["|+", " value", "", " "], "value\n\n\n"],

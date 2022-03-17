@@ -427,6 +427,9 @@ class Parser {
                 }
                 TRAILING_COMMENT => {
                     self.lexer.trailingComment = true;
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
                     check self.initLexer();
                     check self.checkToken();
 
