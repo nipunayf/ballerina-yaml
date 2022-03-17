@@ -407,13 +407,20 @@ class Parser {
 
         self.lexer.state = LEXER_LITERAL;
         string lexemeBuffer = "";
+        string newLineBuffer = "";
+        boolean isFirstLine = true;
 
         check self.checkToken();
 
         while true {
             match self.currentToken.token {
                 PRINTABLE_CHAR => {
+                    if !isFirstLine {
+                        lexemeBuffer += newLineBuffer + "\n";
+                        newLineBuffer = "";
+                    }
                     lexemeBuffer += self.currentToken.value;
+                    isFirstLine = false;
                 }
                 EOL => {
                     // Terminate at the end of the line
@@ -423,7 +430,11 @@ class Parser {
                     check self.initLexer();
                 }
                 EMPTY_LINE => {
-                    lexemeBuffer += "\n";
+                    newLineBuffer += "\n";
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer();
                 }
                 TRAILING_COMMENT => {
                     self.lexer.trailingComment = true;
@@ -459,7 +470,8 @@ class Parser {
                 //TODO: trim trailing newlines
             }
             "+" => {
-
+                lexemeBuffer += "\n";
+                lexemeBuffer += newLineBuffer;
             }
             "=" => {
                 //TODO: trim trailing newlines

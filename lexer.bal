@@ -534,6 +534,11 @@ class Lexer {
                 : self.generateError("Insufficient indent to process literal characters");
         }
 
+        // Generate an empty lines that have less index.
+        if (self.index >= self.line.length()) {
+            return self.generateToken(EMPTY_LINE);
+        }
+
         // Scan printable character
         if self.matchRegexPattern(PRINTABLE_PATTERN, [BOM_PATTERN, LINE_BREAK_PATTERN]) {
             return self.iterate(self.scanPrintableChar, PRINTABLE_CHAR);
