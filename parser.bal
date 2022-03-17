@@ -178,9 +178,9 @@ class Parser {
             MAPPING_END => {
                 return {endType: MAPPING};
             }
-            LITERAL => {
+            LITERAL|FOLDED => {
                 self.lexer.state = LEXER_LITERAL;
-                string value = check self.literal();
+                string value = check self.blockScalar(self.currentToken.token == FOLDED);
                 return {value};
             }
         }
@@ -402,13 +402,14 @@ class Parser {
         return lexemeBuffer;
     }
 
-    private function literal() returns ParsingError|LexicalError|string {
+    private function blockScalar(boolean isFolded) returns ParsingError|LexicalError|string {
         string chompingIndicator = check self.chompingIndicator();
 
         self.lexer.state = LEXER_LITERAL;
         string lexemeBuffer = "";
         string newLineBuffer = "";
         boolean isFirstLine = true;
+        boolean prevTokenIndented = false;
 
         check self.checkToken();
 
@@ -416,10 +417,16 @@ class Parser {
             match self.currentToken.token {
                 PRINTABLE_CHAR => {
                     if !isFirstLine {
-                        lexemeBuffer += newLineBuffer + "\n";
+                        string suffixChar = "\n";
+                        if isFolded && prevTokenIndented && self.currentToken.value[0] != " " {
+                            suffixChar = newLineBuffer.length() == 0 ? " " : "";
+                        }
+                        lexemeBuffer += newLineBuffer + suffixChar;
                         newLineBuffer = "";
                     }
+
                     lexemeBuffer += self.currentToken.value;
+                    prevTokenIndented = self.currentToken.value[0] != " ";
                     isFirstLine = false;
                 }
                 EOL => {
@@ -544,9 +551,12 @@ class Parser {
             MAPPING_START => {
                 return MAPPING;
             }
+            LITERAL|FOLDED => {
+                return self.blockScalar(self.currentToken.token == FOLDED);
+            }
             // TODO: Consider block nodes
         }
-        return self.generateError(check self.formatErrorMessage(1, "<flow-node>", self.prevToken));
+        return self.generateError(check self.formatErrorMessage(1, "<data-node>", self.prevToken));
     }
 
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {

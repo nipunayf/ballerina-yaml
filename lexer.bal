@@ -73,6 +73,9 @@ class Lexer {
     # The lexer is currently processing trailing comments when the flag is set.
     boolean trailingComment = false;
 
+    # When flag is set, updates the current indent to the indent of the first line
+    boolean captureIndent = false;
+
     private map<string> escapedCharMap = {
         "0": "\u{00}",
         "a": "\u{07}",
@@ -347,13 +350,10 @@ class Lexer {
             "}" => {
                 return self.generateToken(MAPPING_END);
             }
-            "|" => { // Literal block scalar
+            "|"|">" => { // Block scalars
                 self.indent += 1;
-                return self.generateToken(LITERAL);
-            }
-            ">" => { // Folded block scalar
-                self.indent += 1;
-                return self.generateToken(FOLDED);
+                self.captureIndent = true;
+                return self.generateToken(self.peek() == "|" ? LITERAL : FOLDED);
             }
         }
 
@@ -537,6 +537,19 @@ class Lexer {
         // Generate an empty lines that have less index.
         if (self.index >= self.line.length()) {
             return self.generateToken(EMPTY_LINE);
+        }
+
+        // Update the indent to the first line
+        if self.captureIndent {
+            int additionalIndent = 0;
+
+            while self.peek() == " " {
+                additionalIndent += 1;
+                self.forward();
+            }
+
+            self.indent += additionalIndent;
+            self.captureIndent = false;
         }
 
         // Scan printable character

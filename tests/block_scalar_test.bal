@@ -25,7 +25,7 @@ function testBlockScalarEvent(string[] lines, string value) returns error? {
 function blockScalarEventDataGen() returns map<[string[], string]> {
     return {
         "correct indentation for indentation-indicator": [["|2", "  value"], "value\n"],
-        "ignore trailing comment": [["|-", "  value", "# trailing comment", " #  trailing comment"], " value"],
+        "ignore trailing comment": [["|-", " value", "# trailing comment", " #  trailing comment"], "value"],
         "capture indented comment": [["|-", " # comment", "# trailing comment"], "# comment"],
         "trailing-lines strip": [["|-", " value", "", " "], "value"],
         "trailing-lines clip": [["|", " value", "", " "], "value\n"],
@@ -35,7 +35,12 @@ function blockScalarEventDataGen() returns map<[string[], string]> {
         "empty keep": [["|+", ""], "\n"],
         "line-break strip": [["|-", " text"], "text"],
         "line-break clip": [["|", " text"], "text\n"],
-        "line-break keep": [["|+", " text"], "text\n"]
+        "line-break keep": [["|+", " text"], "text\n"],
+        "folded lines": [[">-", " first", " second"], "first second"],
+        "spaced lines": [[">-", " first", "   second"], "first\n  second"],
+        "different lines": [[">-", " first", " second", "", "  first", " second"], "first second\n\n first\nsecond"],
+        "same lines": [[">-", " first", " second", "", " first", " second"], "first second\nfirst second"],
+        "indent imposed by first line": [[">-", "  first", "  second"], "first second"]
     };
 }
 
