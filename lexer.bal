@@ -505,7 +505,6 @@ class Lexer {
             match self.peek() {
                 " " => {
                     _ = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                    self.forward();
                     match self.peek() {
                         "#" => { // New line comments are allowed in trailing comments
                             return self.generateToken(EOL);

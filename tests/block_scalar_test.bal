@@ -43,7 +43,7 @@ function blockScalarEventDataGen() returns map<[string[], string]> {
     dataProvider: invalidBlockScalarEventDataGen
 }
 function testInvalidBlockScalarEvent(string[] lines) returns error? {
-    check assertParsingError(lines);
+    check assertParsingError(lines, true);
 }
 
 function invalidBlockScalarEventDataGen() returns map<[string[]]> {

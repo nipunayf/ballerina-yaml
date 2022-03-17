@@ -428,6 +428,7 @@ class Parser {
                 TRAILING_COMMENT => {
                     self.lexer.trailingComment = true;
                     check self.initLexer();
+                    check self.checkToken();
 
                     // Ignore the tokens inside trailing comments
                     while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
@@ -436,6 +437,7 @@ class Parser {
                             break;
                         }
                         check self.initLexer();
+                        check self.checkToken();
                     }
 
                     self.lexer.trailingComment = false;
