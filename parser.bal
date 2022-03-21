@@ -56,6 +56,11 @@ class Parser {
                     };
                 }
 
+                if self.lineIndex == self.numLines - 1 {
+                    return {
+                        endType: STREAM
+                    };
+                }
                 check self.initLexer();
                 return self.parse();
             }
@@ -162,6 +167,9 @@ class Parser {
             MAPPING_KEY => { // Explicit key
                 check self.separate();
                 return self.constructEvent(check self.dataNode());
+            }
+            SEQUENCE_ENTRY => {
+                return {startType: SEQUENCE};
             }
             MAPPING_START => {
                 return {startType: MAPPING};
@@ -552,6 +560,10 @@ class Parser {
                 return MAPPING;
             }
             LITERAL|FOLDED => {
+                if self.lexer.context == FLOW_ENTRY || self.lexer.context == FLOW_IN || self.lexer.context == FLOW_OUT {
+                    return self.generateError("Cannot have a block node inside a flow node");
+                }
+
                 return self.blockScalar(self.currentToken.token == FOLDED);
             }
             // TODO: Consider block nodes

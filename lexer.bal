@@ -58,7 +58,7 @@ class Lexer {
     int[] indents = [];
 
     # Minimum indentation required to the current line
-    int indent = 0;
+    int indent = -1;
 
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
@@ -254,6 +254,8 @@ class Lexer {
                 }
 
                 // Return block sequence entry
+                check self.checkIndent();
+                self.lexeme = self.indent.toString();
                 return self.generateToken(SEQUENCE_ENTRY);
             }
             "." => {
@@ -886,6 +888,29 @@ class Lexer {
             self.forward();
         }
         return true;
+    }
+
+    public function checkIndent() returns LexicalError? {
+        if self.indent == self.index {
+            return;
+        }
+
+        if self.indent < self.index {
+            self.indents.push(self.index);
+            self.indent = self.index;
+            return;
+        }
+
+        while self.indent > self.index {
+            self.indent = self.indents.pop();
+        }
+
+        if self.indent == self.index {
+            self.indents.push(self.indent);
+            return;
+        }
+
+        return self.generateError("Invalid indentation");
     }
 
     # Check for the lexemes to crete an DECIMAL token.
