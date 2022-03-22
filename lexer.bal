@@ -255,7 +255,6 @@ class Lexer {
 
                 // Return block sequence entry
                 check self.checkIndent();
-                self.lexeme = self.indent.toString();
                 return self.generateToken(SEQUENCE_ENTRY);
             }
             "." => {
@@ -881,7 +880,7 @@ class Lexer {
     # + return - Returns true if there are sufficient whitespace to build the indent.
     private function scanIndent(int? n = ()) returns boolean {
         int upperLimit = n == () ? self.indent : n;
-        foreach int i in 1 ... upperLimit {
+        foreach int i in 0 ... upperLimit {
             if !(self.peek() == " ") {
                 return false;
             }
@@ -898,15 +897,19 @@ class Lexer {
         if self.indent < self.index {
             self.indents.push(self.index);
             self.indent = self.index;
+            self.lexeme = "+";
             return;
         }
 
+        int decrease = 0;
         while self.indent > self.index {
             self.indent = self.indents.pop();
+            decrease += 1;
         }
 
         if self.indent == self.index {
             self.indents.push(self.indent);
+            self.lexeme = "-" + (decrease - 1).toString();
             return;
         }
 

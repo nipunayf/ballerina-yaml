@@ -14,24 +14,25 @@ function testBlockCollectionEvents(string|string[] line, Event[] eventStream) re
 
 function collectionDataGen() returns map<[string|string[], Event[]]> {
     return {
-        // "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
-        // "compact sequence in-line": ["- - value", [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value"}]],
-        // "empty sequence entry": ["- ", [{startType: SEQUENCE}, {endType: STREAM}]],
+        "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
+        "compact sequence in-line": ["- - value", [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value"}]],
+        "empty sequence entry": ["- ", [{startType: SEQUENCE}, {endType: STREAM}]],
         "nested sequence": [["- ", " - value1", " - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {value: "value2"}, {endType: SEQUENCE}, {value: "value3"}]]
     };
 }
 
-@test:Config {
-    dataProvider: invalidCollectionDataGen
-}
-function testInvalidCollectionBlock(string|string[] line) returns error? {
-    check assertParsingError(line);
-}
+@test:Config {}
+function testInvalidIndentCollection() returns error? {
+    Parser parser = check new Parser(["- ", "  - value", " - value"]);
 
-function invalidCollectionDataGen() returns map<[string|string[]]> {
-    return {
-        "invalid nested indent": [["- ", "  - value", " - value"]]
-    };
+    Event event = check parser.parse();
+    test:assertEquals((<StartEvent>event).startType, SEQUENCE);
+
+    event = check parser.parse();
+    test:assertEquals((<StartEvent>event).startType, SEQUENCE);
+
+    Event|error err = parser.parse();
+    test:assertTrue(err is LexicalError);
 }
 
 @test:Config {}
@@ -49,4 +50,4 @@ function testIndentationOfBlockToken() returns error? {
 // @test:Config {}
 // function testInvalidIndentationOfBlockToken() {
 
-// }
+// }    

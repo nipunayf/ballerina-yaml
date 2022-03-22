@@ -29,6 +29,8 @@ class Parser {
     # YAML version of the document.
     string? yamlVersion = ();
 
+    private Event[] eventBuffer = [];
+
     function init(string[] lines) returns ParsingError? {
         self.lines = lines;
         self.numLines = lines.length();
@@ -45,6 +47,11 @@ class Parser {
         // Ignore the whitespace at the head
         if self.currentToken.token == SEPARATION_IN_LINE {
             check self.checkToken();
+        }
+
+        if self.eventBuffer.length() > 0 {
+            Event event = self.eventBuffer.pop();
+            return event;
         }
 
         match self.currentToken.token {
@@ -169,7 +176,29 @@ class Parser {
                 return self.constructEvent(check self.dataNode());
             }
             SEQUENCE_ENTRY => {
-                return {startType: SEQUENCE};
+                match self.currentToken.value {
+                    "+" => {
+                        return {startType: SEQUENCE};
+                    }
+                    "" => {
+                        return self.parse();
+                    }
+                    _ => {
+                        if self.currentToken.value[0] != "-" {
+                            return self.generateError("Invalid <sequence-entry> token");
+                        }
+                        int decrease = <int>(check self.processTypeCastingError('int:fromString(self.currentToken.value.substring(1))));
+                        if decrease < 1 {
+                            return self.generateError("Invalid <sequence-entry> token");
+                        }
+                        if decrease > 1 {
+                            foreach int i in 2 ... decrease {
+                                self.eventBuffer.push({endType: SEQUENCE});
+                            }
+                        }
+                        return {endType: SEQUENCE};
+                    }
+                }
             }
             MAPPING_START => {
                 return {startType: MAPPING};
@@ -370,12 +399,13 @@ class Parser {
         string lexemeBuffer = self.currentToken.value;
         boolean emptyLine = false;
 
-        check self.checkToken();
+        check self.checkToken(peek = true);
 
         // Iterate the content until an invalid token is found
         while true {
-            match self.currentToken.token {
+            match self.tokenBuffer.token {
                 PLANAR_CHAR => {
+                    check self.checkToken();
                     if emptyLine {
                         emptyLine = false;
                     } else { // Add a whitespace if there are no preceding empty lines
@@ -384,6 +414,7 @@ class Parser {
                     lexemeBuffer += self.currentToken.value;
                 }
                 EOL => {
+                    check self.checkToken();
                     // Terminate at the end of the line
                     if self.lineIndex == self.numLines - 1 {
                         break;
@@ -393,8 +424,15 @@ class Parser {
                 EMPTY_LINE => {
                     lexemeBuffer += "\n";
                     emptyLine = true;
+                    check self.checkToken();
+                    // Terminate at the end of the line
+                    if self.lineIndex == self.numLines - 1 {
+                        break;
+                    }
+                    check self.initLexer("");
                 }
                 SEPARATION_IN_LINE => {
+                    check self.checkToken();
                     // Continue to scan planar char if the white space at the EOL
                     check self.checkToken(peek = true);
                     if self.tokenBuffer.token == MAPPING_VALUE {
@@ -405,7 +443,7 @@ class Parser {
                     break;
                 }
             }
-            check self.checkToken();
+            check self.checkToken(peek = true);
         }
         return lexemeBuffer;
     }
@@ -794,6 +832,20 @@ class Parser {
         self.lexer.line = self.lines[self.lineIndex];
         self.lexer.index = 0;
         self.lexer.lineNumber = self.lineIndex;
+    }
+
+    # Check errors during type casting to Ballerina types.
+    #
+    # + value - Value to be type casted.
+    # + return - Value as a Ballerina data type  
+    private function processTypeCastingError(anydata|error value) returns anydata|ParsingError {
+        // Check if the type casting has any errors
+        if value is error {
+            return self.generateError("Invalid value for assignment");
+        }
+
+        // Returns the value on success
+        return value;
     }
 
     # Generates a Parsing Error Error.
