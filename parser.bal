@@ -41,17 +41,18 @@ class Parser {
     #
     # + return - Lexical or parsing error on failure
     public function parse() returns Event|LexicalError|ParsingError {
+        // Empty the event buffer before getting new tokens
+        if self.eventBuffer.length() > 0 {
+            Event event = self.eventBuffer.pop();
+            return event;
+        }
+        
         self.lexer.state = LEXER_START;
         check self.checkToken();
 
         // Ignore the whitespace at the head
         if self.currentToken.token == SEPARATION_IN_LINE {
             check self.checkToken();
-        }
-
-        if self.eventBuffer.length() > 0 {
-            Event event = self.eventBuffer.pop();
-            return event;
         }
 
         match self.currentToken.token {

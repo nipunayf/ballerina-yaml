@@ -17,7 +17,8 @@ function collectionDataGen() returns map<[string|string[], Event[]]> {
         "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
         "compact sequence in-line": ["- - value", [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value"}]],
         "empty sequence entry": ["- ", [{startType: SEQUENCE}, {endType: STREAM}]],
-        "nested sequence": [["- ", " - value1", " - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {value: "value2"}, {endType: SEQUENCE}, {value: "value3"}]]
+        "nested sequence": [["- ", " - value1", " - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {value: "value2"}, {endType: SEQUENCE}, {value: "value3"}]],
+        "multiple end sequences": [["- ", " - value1", "   - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {startType: SEQUENCE}, {value: "value2"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {value: "value3"}]]
     };
 }
 
@@ -46,8 +47,3 @@ function testIndentationOfBlockToken() returns error? {
         test:assertEquals(parser.lexer.indents.length(), indentMapping[i][1]);
     }
 }
-
-// @test:Config {}
-// function testInvalidIndentationOfBlockToken() {
-
-// }    
