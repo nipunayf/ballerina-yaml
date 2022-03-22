@@ -46,7 +46,7 @@ class Parser {
             Event event = self.eventBuffer.pop();
             return event;
         }
-        
+
         self.lexer.state = LEXER_START;
         check self.checkToken();
 
@@ -64,7 +64,7 @@ class Parser {
                     };
                 }
 
-                if self.lineIndex == self.numLines - 1 {
+                if self.lineIndex >= self.numLines - 1 {
                     return {
                         endType: STREAM
                     };
@@ -90,7 +90,14 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                return self.constructEvent(check self.dataNode(true));
+                Event outputBuffer = check self.constructEvent(check self.dataNode(true));
+
+                if (<ScalarEvent>outputBuffer).isKey == true {
+                    self.eventBuffer.push(outputBuffer);
+                    return {startType: MAPPING};
+                }
+
+                return outputBuffer;
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -205,7 +212,7 @@ class Parser {
                 return {startType: MAPPING};
             }
             SEQUENCE_START => {
-                return {startType: SEQUENCE};
+                return {startType: SEQUENCE, flowStyle: true};
             }
             DOCUMENT_MARKER => {
                 return {endType: DOCUMENT};

@@ -737,7 +737,7 @@ class Lexer {
             return true;
         }
 
-        if self.peek() == "}" {
+        if self.checkCharacter(["}", "]"]) {
             return true;
         }
 
