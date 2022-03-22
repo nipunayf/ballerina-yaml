@@ -1,5 +1,6 @@
 import ballerina/io;
 
-public function main() {
-    io:println("Hello, this is the YAML module!");
+public function main() returns error? {
+    string[] lines = check io:fileReadLines(".github/workflows/ci.yml");
+    Parser parser = check new Parser(lines);
 }

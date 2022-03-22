@@ -737,6 +737,10 @@ class Lexer {
             return true;
         }
 
+        if self.peek() == "}" {
+            return true;
+        }
+
         //TODO: consider the actions for incorrect planar char
         return self.generateError(self.formatErrorMessage(PLANAR_CHAR));
     }
