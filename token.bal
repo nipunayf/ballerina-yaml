@@ -5,7 +5,7 @@ type Token record {|
 
 enum YAMLToken {
     BOM,
-    SEQUENCE_ENTRY,
+    SEQUENCE_ENTRY = "-",
     MAPPING_KEY = "?",
     MAPPING_VALUE = ":",
     SEPARATOR = ",",
