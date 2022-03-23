@@ -57,12 +57,12 @@ class Parser {
 
         match self.currentToken.token {
             EOL|EMPTY_LINE => {
-                if self.expectEmptyNode {
-                    self.expectEmptyNode = false;
-                    return {
-                        value: ()
-                    };
-                }
+                // if self.expectEmptyNode {
+                //     self.expectEmptyNode = false;
+                //     return {
+                //         value: ()
+                //     };
+                // }
 
                 if self.lineIndex >= self.numLines - 1 {
                     return {
@@ -90,14 +90,7 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                Event outputBuffer = check self.constructEvent(check self.dataNode(true));
-
-                if (<ScalarEvent>outputBuffer).isKey == true {
-                    self.eventBuffer.push(outputBuffer);
-                    return {startType: MAPPING};
-                }
-
-                return outputBuffer;
+                return self.constructEvent(check self.dataNode(true));
             }
             ALIAS => {
                 string alias = self.currentToken.value;

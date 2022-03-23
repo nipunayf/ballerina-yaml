@@ -13,10 +13,10 @@ function testGenerateNativeDataStructure(string|string[] line, anydata structure
 
 function nativeDataStructureDataGen() returns map<[string|string[], anydata]> {
     return {
-        // "empty sequence": ["[]", []],
-        // "mapping": ["{key: value}", {"key": "value"}]
-        "block style nested mapping": [["key1: ", " key2: value"], {"key1": {"key2": "value"}}]
-        // "block style nested sequence": [["- ", " - first", " - second"], [["first", "second"]]]
+        "empty sequence": ["[]", []],
+        "mapping": ["{key: value}", {"key": "value"}],
+        "block style nested mapping": [["key1: ", " key2: value"], {"key1": {"key2": "value"}}],
+        "block style nested sequence": [["- ", " - first", " - second"], [["first", "second"]]]
     };
 }
 
