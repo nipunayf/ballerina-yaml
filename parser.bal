@@ -446,7 +446,7 @@ class Parser {
             }
             check self.checkToken(peek = true);
         }
-        return lexemeBuffer;
+        return  self.trimTailWhitespace(lexemeBuffer);
     }
 
     private function blockScalar(boolean isFolded) returns ParsingError|LexicalError|string {

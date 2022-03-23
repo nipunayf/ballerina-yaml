@@ -723,7 +723,9 @@ class Lexer {
 
         // Check for mapping value with a space after it 
         if self.peek() == ":" {
-            if self.peek(1) == " " {
+            if !self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
+                [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN]
+                : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                 self.forward(-numWhitespace);
                 return true;
             }
