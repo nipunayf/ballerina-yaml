@@ -258,7 +258,16 @@ class Lexer {
                 return self.generateToken(SEQUENCE_ENTRY);
             }
             "." => {
-                return self.tokensInSequence("...", DOCUMENT_MARKER);
+                // Scan for directive marker
+                if self.peek(1) == "." && self.peek(2) == "." {
+                    self.forward(2);
+                    return self.generateToken(DOCUMENT_MARKER);
+                }
+
+                // Scan for planar characters
+                self.forward();
+                self.lexeme += ".";
+                return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
             }
             "*" => {
                 self.forward();

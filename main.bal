@@ -7,5 +7,5 @@ public function main() returns error? {
     Composer composer = new Composer(parser);
     anydata[] output = check composer.compose();
 
-    io:print(output);
+    check io:fileWriteJson("ci.json", output.toJson());
 }
