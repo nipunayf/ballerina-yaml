@@ -82,6 +82,11 @@ function assertParsingEvent(string|string[] lines, string value = "", string tag
     }
 }
 
+function assertEvent(Parser parser, Event assertingEvent) returns error? {
+    Event event = check parser.parse();
+    test:assertEquals(event, assertingEvent);
+}
+
 # Assert if an parsing error is generated during the parsing
 #
 # + lines - Lines to be parsed.  

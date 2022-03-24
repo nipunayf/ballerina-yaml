@@ -54,11 +54,13 @@ class Lexer {
     # Current state of the Lexer
     State state = LEXER_START;
 
-    # Minimum indentation imposed by the parent node
-    int[] indents = [];
+    # Minimum indentation imposed by the parent nodes
+    int[] seqIndents = [];
+    int[] mapIndents = [];
 
     # Minimum indentation required to the current line
     int indent = -1;
+    int keyIndent = 0;
 
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
@@ -159,7 +161,6 @@ class Lexer {
         if self.peek() == "\"" {
             return self.generateToken(DOUBLE_QUOTE_DELIMITER);
         }
-
         // Regular double quoted characters
         if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
@@ -249,6 +250,7 @@ class Lexer {
                 // Scan for planar characters
                 if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                     self.forward();
+                    self.keyIndent = self.index;
                     self.lexeme += "-";
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
@@ -266,12 +268,23 @@ class Lexer {
 
                 // Scan for planar characters
                 self.forward();
+                self.keyIndent = self.index;
                 self.lexeme += ".";
                 return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
             }
             "*" => {
+                LexicalError? err = check self.assertIndent(1);
+                int startIndent = self.index;
                 self.forward();
-                return self.iterate(self.scanAnchorName, ALIAS);
+                Token token = check self.iterate(self.scanAnchorName, ALIAS);
+
+                if err is LexicalError { // Not sufficient indent to process as a value token
+                    if self.peek(1) == ":" { // The token is a mapping key
+                        check self.checkIndent(startIndent);
+                    }
+                    return self.generateError("Invalid indentation");
+                }
+                return token;
             }
             "%" => { // Directive line
                 self.forward();
@@ -288,6 +301,7 @@ class Lexer {
                 }
             }
             "!" => { // Node tags
+                check self.assertIndent(1);
                 match self.peek(1) {
                     "<" => { // Verbatim tag
                         self.forward(2);
@@ -320,6 +334,7 @@ class Lexer {
                 }
             }
             "&" => {
+                check self.assertIndent(1);
                 self.forward();
                 return self.iterate(self.scanAnchorName, ANCHOR);
             }
@@ -340,21 +355,28 @@ class Lexer {
                 return self.generateToken(MAPPING_KEY);
             }
             "\"" => { // Process double quote flow style value
+                check self.assertIndent(1);
+                self.keyIndent = self.index;
                 return self.generateToken(DOUBLE_QUOTE_DELIMITER);
             }
             "'" => {
+                check self.assertIndent(1);
+                self.keyIndent = self.index;
                 return self.generateToken(SINGLE_QUOTE_DELIMITER);
             }
             "," => {
+                //TODO: only valid in flow sequence
                 return self.generateToken(SEPARATOR);
             }
             "[" => {
+                check self.assertIndent(1);
                 return self.generateToken(SEQUENCE_START);
             }
             "]" => {
                 return self.generateToken(SEQUENCE_END);
             }
             "{" => {
+                check self.assertIndent(1);
                 return self.generateToken(MAPPING_START);
             }
             "}" => {
@@ -369,8 +391,25 @@ class Lexer {
 
         // Check for first character of planar scalar
         if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
-            return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+            // TODO: repeat this strategy for double and single quoted strings
+            LexicalError? err = self.assertIndent(1);
+            int startIndent = self.index;
+            Token token = check self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+
+            if err is LexicalError { // Not sufficient indent to process as a value token
+                if self.peek() == ":" { // The token is a mapping key
+                    check self.checkIndent(startIndent);
+                    token.indentation = true;
+                    return token;
+                }
+                return self.generateError("Invalid indentation");
+            }
+            if self.peek() == ":" {
+                check self.checkIndent(startIndent);
+            }
+            return token;
         }
+
         return self.generateError(self.formatErrorMessage("document prefix"));
     }
 
@@ -891,11 +930,9 @@ class Lexer {
 
     # Scan the whitespace to build an indent.
     #
-    # + n - Number of whitespace for the indent.
     # + return - Returns true if there are sufficient whitespace to build the indent.
-    private function scanIndent(int? n = ()) returns boolean {
-        int upperLimit = n == () ? self.indent : n;
-        foreach int i in 0 ... upperLimit {
+    private function scanIndent() returns boolean {
+        foreach int i in 0 ... self.indent {
             if !(self.peek() == " ") {
                 return false;
             }
@@ -904,31 +941,50 @@ class Lexer {
         return true;
     }
 
-    public function checkIndent() returns LexicalError? {
-        if self.indent == self.index {
+    # Validates the indentation of block collections.
+    # Increments and decrement the indentation safely.
+    # If the indent is explicitly given, then the function continues for mappings.
+    #
+    # + mapIndex - If the current token is a mapping key, then the starting index of it.
+    # + return - An indentation error on failure
+    public function checkIndent(int? mapIndex = ()) returns LexicalError? {
+        int startIndex = mapIndex == () ? self.index : mapIndex;
+        int[] indents = mapIndex == () ? self.seqIndents : self.mapIndents;
+
+        if self.indent == startIndex {
             return;
         }
 
-        if self.indent < self.index {
-            self.indents.push(self.index);
-            self.indent = self.index;
-            self.lexeme = "+";
+        if self.indent < startIndex {
+            indents.push(startIndex);
+            if mapIndex == () {
+                self.lexeme = "+";
+            }
+            self.indent = startIndex;
             return;
         }
 
         int decrease = 0;
-        while self.indent > self.index {
-            self.indent = self.indents.pop();
+        while self.indent > startIndex {
+            self.indent = indents.pop();
             decrease += 1;
         }
 
-        if self.indent == self.index {
-            self.indents.push(self.indent);
-            self.lexeme = "-" + (decrease - 1).toString();
+        if self.indent == startIndex {
+            indents.push(self.indent);
+            if mapIndex == () {
+                self.lexeme = "-" + (decrease - 1).toString();
+            }
             return;
         }
 
         return self.generateError("Invalid indentation");
+    }
+
+    private function assertIndent(int offset = 0) returns LexicalError? {
+        if self.index < self.indent + offset {
+            return self.generateError("Invalid indentation");
+        }
     }
 
     # Check for the lexemes to crete an DECIMAL token.

@@ -90,7 +90,7 @@ function testMultipleMapEntriesEvent(string[] arr, string?[] keys, string?[] val
         event = check parser.parse();
         test:assertEquals((<ScalarEvent>event).value, values[i]);
     }
-}   
+}
 
 function multipleMapEntriesDataGen() returns map<[string[], string?[], string?[]]> {
     return {

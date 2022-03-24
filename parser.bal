@@ -406,6 +406,9 @@ class Parser {
         while true {
             match self.tokenBuffer.token {
                 PLANAR_CHAR => {
+                    if self.tokenBuffer.indentation {
+                        break;
+                    }
                     check self.checkToken();
                     if emptyLine {
                         emptyLine = false;

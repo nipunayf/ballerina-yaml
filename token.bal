@@ -1,6 +1,7 @@
 type Token record {|
     YAMLToken token;
     string value = "";
+    boolean indentation = false;
 |};
 
 enum YAMLToken {
