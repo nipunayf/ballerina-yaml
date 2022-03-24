@@ -110,7 +110,12 @@ class Composer {
             }
 
             structure[key.toString()] = value;
-            event = check self.parser.parse();
+            if self.buffer == () {
+                event = check self.parser.parse();
+            } else {
+                event = <Event>self.buffer;
+                self.buffer = ();
+            }
 
             if event is StartEvent|ScalarEvent && event.entry {
                 self.buffer = event;
