@@ -16,7 +16,8 @@ function nativeDataStructureDataGen() returns map<[string|string[], anydata]> {
         "empty sequence": ["[]", []],
         "mapping": ["{key: value}", {"key": "value"}],
         "block style nested mapping": [["key1: ", " key2: value"], {"key1": {"key2": "value"}}],
-        "block style nested sequence": [["- ", " - first", " - second"], [["first", "second"]]]
+        "block style nested sequence": [["- ", " - first", " - second"], [["first", "second"]]],
+        "mapping nested under sequence": [["- first: item1", "  second: item2", "- third: item3"], [{"first": "item1", "second": "item2"}, {"third": "item3"}]]
     };
 }
 

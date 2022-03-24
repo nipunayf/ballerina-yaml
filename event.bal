@@ -10,6 +10,7 @@ type NodeEvent record {|
     string? tagHandle  = ();
     boolean isKey = false;
     boolean flowStyle = false;
+    boolean entry = false;
     // boolean implicit = true;
     // string style = ;
 |};

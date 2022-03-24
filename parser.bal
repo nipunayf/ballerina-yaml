@@ -23,6 +23,7 @@ class Parser {
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
+    private boolean sequenceEntry = false;
 
     map<string> tagHandles = {};
 
@@ -182,6 +183,7 @@ class Parser {
                         return {startType: SEQUENCE};
                     }
                     "" => {
+                        self.sequenceEntry = true;
                         return self.parse();
                     }
                     _ => {
@@ -586,7 +588,13 @@ class Parser {
         // Check if the current node is a key
         boolean isKey = check self.isNodeKey();
 
-        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, isKey} : {value: value, isKey});
+        boolean entry = false;
+        if self.sequenceEntry {
+            entry = true;
+            self.sequenceEntry = false;
+        }
+
+        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, isKey, entry} : {value: value, isKey, entry});
 
         if buffer == () {
             return event;

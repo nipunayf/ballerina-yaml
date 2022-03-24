@@ -1,6 +1,6 @@
 class Composer {
-
     Parser parser;
+    private Event? buffer = ();
 
     function init(Parser parser) {
         self.parser = parser;
@@ -11,10 +11,6 @@ class Composer {
         Event event = check self.parser.parse();
 
         while !(event is EndEvent && event.endType == STREAM) {
-            if event is StartEvent|ScalarEvent && event.isKey {
-                output.push(check self.composeMapping(event));
-            }
-
             output.push(check self.composeNode(event));
             event = check self.parser.parse();
         }
@@ -52,7 +48,12 @@ class Composer {
             }
 
             sequence.push(check self.composeNode(event));
-            event = check self.parser.parse();
+            if self.buffer == () {
+                event = check self.parser.parse();
+            } else {
+                event = <Event>self.buffer;
+                self.buffer = ();
+            }
         }
 
         return sequence;
@@ -95,7 +96,7 @@ class Composer {
             if !(<StartEvent|ScalarEvent>event).isKey {
                 return self.generateError("Expected a key for a mapping");
             }
-            anydata key = check self.composeNode(event);
+            anydata key = check self.composeNode(event, true);
 
             event = check self.parser.parse();
             anydata value;
@@ -110,36 +111,15 @@ class Composer {
 
             structure[key.toString()] = value;
             event = check self.parser.parse();
+
+            if event is StartEvent|ScalarEvent && event.entry {
+                self.buffer = event;
+                break;
+            }
         }
 
         return structure;
     }
-
-    // private function composeMapping() returns map<anydata>|LexicalError|ParsingError|ComposingError {
-    //     map<anydata> structure = {};
-    //     Event event = check self.parser.parse();
-
-    //     while event is ScalarEvent {
-    //         string? key = event.value;
-
-    //         event = check self.parser.parse();
-
-    //         if !(event is ScalarEvent) {
-    //             check self.generateError("Unexpected event for a mapping value");
-    //         }
-
-    //         string? value = (<ScalarEvent>event).value;
-    //         structure[key is string ? key : "null"] = value;
-
-    //         event = check self.parser.parse();
-    //     }
-
-    //     if event is EndEvent && event.endType == MAPPING {
-    //         return structure;
-    //     }
-
-    //     return self.generateError("Expected to end the mapping");
-    // }
 
     // TODO: Tag resolution for 
     // private function composeScalar() returns anydata|LexicalError|ParsingError|ComposingError {
@@ -147,7 +127,7 @@ class Composer {
 
     // }
 
-    private function composeNode(Event event) returns anydata|LexicalError|ParsingError|ComposingError {
+    private function composeNode(Event event, boolean insideMapping = false) returns anydata|LexicalError|ParsingError|ComposingError {
 
         // Check for +SEQ
         if event is StartEvent && event.startType == SEQUENCE {
@@ -157,6 +137,10 @@ class Composer {
         // Check for +MAP
         if event is StartEvent && event.startType == MAPPING {
             return check self.composeMapping();
+        }
+
+        if event is ScalarEvent && event.isKey && !insideMapping {
+            return check self.composeMapping(event);
         }
 
         // Check for SCALAR
