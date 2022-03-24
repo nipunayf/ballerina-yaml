@@ -90,12 +90,18 @@ function assertEvent(Parser parser, Event assertingEvent) returns error? {
 # Assert if an parsing error is generated during the parsing
 #
 # + lines - Lines to be parsed.  
-# + isLexical - If set, checks for Lexical errors. Else, checks for Parsing errors.
+# + isLexical - If set, checks for Lexical errors. Else, checks for Parsing errors.  
+# + eventNumber - Number of times to parse before the error is generated.
 # + return - An parsing error if the line is empty.
-function assertParsingError(string|string[] lines, boolean isLexical = false) returns error? {
+function assertParsingError(string|string[] lines, boolean isLexical = false, int eventNumber = 1) returns error? {
     Parser parser = check new Parser((lines is string) ? [lines] : lines);
-    Event|error err = parser.parse();
 
+    Event|error err;
+
+    foreach int i in 1 ... eventNumber {
+        err = parser.parse();
+    }
+    
     if (isLexical) {
         test:assertTrue(err is LexicalError);
     } else {

@@ -949,6 +949,10 @@ class Lexer {
     # + return - An indentation error on failure
     public function checkIndent(int? mapIndex = ()) returns LexicalError? {
         int startIndex = mapIndex == () ? self.index : mapIndex;
+        if mapIndex is int  && self.seqIndents.indexOf(startIndex) is int {
+            return self.generateError("Block mapping cannot have the same indent as a block sequence");
+        }
+
         int[] indents = mapIndex == () ? self.seqIndents : self.mapIndents;
 
         if self.indent == startIndex {

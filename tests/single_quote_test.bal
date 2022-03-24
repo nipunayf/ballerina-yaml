@@ -27,7 +27,7 @@ function testPlanarToken(string line, string lexeme) returns error? {
 function planarDataGen() returns map<[string, string]> {
     return {
         "ns-char": ["ns", "ns"],
-        ":": ["::", "::"],
+        ":": ["::0", "::0"],
         "?": ["??", "??"],
         "-": ["--", "--"],
         "ignore-comment": ["plain #comment", "plain"],
@@ -65,7 +65,7 @@ function testFlowKeyEvent(string line, string? key, string? value) returns error
 function flowKeyDataGen() returns map<[string, string?, string?]> {
     return {
         "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
-        "omitted value": ["omitted value: ", "omitted value", ()],
+        // "omitted value": ["omitted value: ", "omitted value", ()],
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
         "json-key with space": ["'json-key': \"json\"", "json-key", "json"],

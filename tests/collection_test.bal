@@ -39,7 +39,7 @@ function testInvalidIndentCollection() returns error? {
 
 @test:Config {}
 function testBlockMapAndSequenceAtSameIndent() returns error? {
-    check assertParsingError(["- seq", "map: value"]);
+    check assertParsingError(["- seq", "map: value"], true, 2);
 }
 
 @test:Config {}
