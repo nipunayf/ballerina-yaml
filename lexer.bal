@@ -949,7 +949,7 @@ class Lexer {
     # + return - An indentation error on failure
     public function checkIndent(int? mapIndex = ()) returns LexicalError? {
         int startIndex = mapIndex == () ? self.index : mapIndex;
-        if mapIndex is int  && self.seqIndents.indexOf(startIndex) is int {
+        if mapIndex is int && self.seqIndents.indexOf(startIndex) is int {
             return self.generateError("Block mapping cannot have the same indent as a block sequence");
         }
 
@@ -976,7 +976,7 @@ class Lexer {
 
         if self.indent == startIndex {
             indents.push(self.indent);
-            if mapIndex == () {
+            if mapIndex == () && decrease > 1 {
                 self.lexeme = "-" + (decrease - 1).toString();
             }
             return;
@@ -989,6 +989,19 @@ class Lexer {
         if self.index < self.indent + offset {
             return self.generateError("Invalid indentation");
         }
+    }
+
+    function getSequenceIndentChange() returns int {
+        if self.seqIndents.length() == 0 {
+            return 0;
+        }
+        int decrease = 0;
+        int seqIndent = self.seqIndents[self.seqIndents.length() - 1];
+        while self.indent < seqIndent && self.seqIndents.length() > 0 {
+            seqIndent = self.seqIndents.pop();
+            decrease += 1;
+        }
+        return decrease;
     }
 
     # Check for the lexemes to crete an DECIMAL token.
