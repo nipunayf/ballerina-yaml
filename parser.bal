@@ -23,6 +23,7 @@ class Parser {
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
+    private boolean sequenceEntry = false;
 
     map<string> tagHandles = {};
 
@@ -43,10 +44,10 @@ class Parser {
     public function parse() returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
-            Event event = self.eventBuffer.pop();
+            Event event = self.eventBuffer.remove(0);
             return event;
         }
-        
+
         self.lexer.state = LEXER_START;
         check self.checkToken();
 
@@ -57,14 +58,14 @@ class Parser {
 
         match self.currentToken.token {
             EOL|EMPTY_LINE => {
-                if self.expectEmptyNode {
-                    self.expectEmptyNode = false;
-                    return {
-                        value: ()
-                    };
-                }
+                // if self.expectEmptyNode {
+                //     self.expectEmptyNode = false;
+                //     return {
+                //         value: ()
+                //     }
+                // }
 
-                if self.lineIndex == self.numLines - 1 {
+                if self.lineIndex >= self.numLines - 1 {
                     return {
                         endType: STREAM
                     };
@@ -90,7 +91,7 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                return self.constructEvent(check self.dataNode(true));
+                return self.appendData(peeked = true);
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -117,7 +118,7 @@ class Parser {
                     check self.separate();
                 }
 
-                return self.constructEvent({tag, tagHandle, anchor}, check self.dataNode());
+                return self.appendData({tag, tagHandle, anchor});
             }
             TAG => {
                 // Obtain the tag name
@@ -134,7 +135,7 @@ class Parser {
                     check self.separate();
                 }
 
-                return self.constructEvent({tag, anchor}, check self.dataNode());
+                return self.appendData({tag, anchor});
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -163,7 +164,7 @@ class Parser {
                     }
                 }
 
-                return self.constructEvent({tagHandle, tag, anchor}, check self.dataNode());
+                return self.appendData({tagHandle, tag, anchor});
             }
             MAPPING_VALUE => { // Empty node as the key
                 check self.separate();
@@ -174,7 +175,7 @@ class Parser {
             }
             MAPPING_KEY => { // Explicit key
                 check self.separate();
-                return self.constructEvent(check self.dataNode());
+                return self.appendData();
             }
             SEQUENCE_ENTRY => {
                 match self.currentToken.value {
@@ -182,6 +183,7 @@ class Parser {
                         return {startType: SEQUENCE};
                     }
                     "" => {
+                        self.sequenceEntry = true;
                         return self.parse();
                     }
                     _ => {
@@ -205,7 +207,7 @@ class Parser {
                 return {startType: MAPPING};
             }
             SEQUENCE_START => {
-                return {startType: SEQUENCE};
+                return {startType: SEQUENCE, flowStyle: true};
             }
             DOCUMENT_MARKER => {
                 return {endType: DOCUMENT};
@@ -406,6 +408,9 @@ class Parser {
         while true {
             match self.tokenBuffer.token {
                 PLANAR_CHAR => {
+                    if self.tokenBuffer.indentation {
+                        break;
+                    }
                     check self.checkToken();
                     if emptyLine {
                         emptyLine = false;
@@ -446,7 +451,7 @@ class Parser {
             }
             check self.checkToken(peek = true);
         }
-        return lexemeBuffer;
+        return self.trimTailWhitespace(lexemeBuffer);
     }
 
     private function blockScalar(boolean isFolded) returns ParsingError|LexicalError|string {
@@ -562,14 +567,40 @@ class Parser {
         }
     }
 
-    private function dataNode(boolean peeked = false) returns map<anydata>|LexicalError|ParsingError {
+    private function appendData(map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
+        Event? buffer = ();
+
+        if self.currentToken.indentation {
+            int decrease = self.lexer.getSequenceIndentChange();
+            if decrease > 1 {
+                foreach int i in 2 ... decrease {
+                    self.eventBuffer.push({endType: SEQUENCE});
+                }
+                buffer = {endType: SEQUENCE};
+            }
+            if decrease == 1 {
+                buffer = {endType: SEQUENCE};
+            }
+        }
 
         // Check if the current node is a key
         boolean isKey = check self.isNodeKey();
 
-        return value is EventType ? {startType: value, isKey} : {value: value, isKey};
+        boolean entry = false;
+        if self.sequenceEntry {
+            entry = true;
+            self.sequenceEntry = false;
+        }
+
+        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, isKey, entry} : {value: value, isKey, entry});
+
+        if buffer == () {
+            return event;
+        }
+        self.eventBuffer.push(event);
+        return buffer;
     }
 
     private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
