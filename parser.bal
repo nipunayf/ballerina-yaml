@@ -110,13 +110,8 @@ class Parser {
                 // Check if there is a separate 
                 check self.separate();
 
-                // Obtain the anchor value if there exists
-                string? anchor = ();
-                if self.tokenBuffer.token == ANCHOR {
-                    check self.checkToken();
-                    anchor = self.currentToken.value;
-                    check self.separate();
-                }
+                // Obtain the anchor if there exists
+                string? anchor = check self.nodeAnchor();
 
                 return self.appendData({tag, tagHandle, anchor});
             }
@@ -124,16 +119,11 @@ class Parser {
                 // Obtain the tag name
                 string tag = self.currentToken.value;
 
-                // Check fi there is a separate
+                // There must be a separate after the tag
                 check self.separate();
 
                 // Obtain the anchor if there exists
-                string? anchor = ();
-                if self.tokenBuffer.token == ANCHOR {
-                    check self.checkToken();
-                    anchor = self.currentToken.value;
-                    check self.separate();
-                }
+                string? anchor = check self.nodeAnchor();
 
                 return self.appendData({tag, anchor});
             }
@@ -145,24 +135,9 @@ class Parser {
                 check self.separate();
 
                 // Obtain the tag if there exists
-                string? tag = ();
-                string? tagHandle = ();
-                match self.tokenBuffer.token {
-                    TAG => {
-                        check self.checkToken();
-                        tag = self.currentToken.value;
-                        check self.separate();
-                    }
-                    TAG_HANDLE => {
-                        check self.checkToken();
-                        tagHandle = self.currentToken.value;
-
-                        self.lexer.state = LEXER_TAG_NODE;
-                        check self.checkToken(TAG);
-                        tag = self.currentToken.value;
-                        check self.separate();
-                    }
-                }
+                string? tagHandle;
+                string? tag;
+                [tagHandle, tag] = check self.nodeTagHandle();
 
                 return self.appendData({tagHandle, tag, anchor});
             }
@@ -567,6 +542,58 @@ class Parser {
         }
     }
 
+    private function nodeTagHandle() returns [string?, string?]|ParsingError|LexicalError {
+        string? tag = ();
+        string? tagHandle = ();
+        match self.tokenBuffer.token {
+            TAG => {
+                check self.checkToken();
+                tag = self.currentToken.value;
+                check self.separate();
+            }
+            TAG_HANDLE => {
+                check self.checkToken();
+                tagHandle = self.currentToken.value;
+
+                self.lexer.state = LEXER_TAG_NODE;
+                check self.checkToken(TAG);
+                tag = self.currentToken.value;
+                check self.separate();
+            }
+        }
+
+        return [tagHandle, tag];
+    }
+
+    private function nodeAnchor() returns string?|LexicalError|ParsingError {
+        string? anchor = ();
+        if self.tokenBuffer.token == ANCHOR {
+            check self.checkToken();
+            anchor = self.currentToken.value;
+            check self.separate();
+        }
+        return anchor;
+    }
+
+    private function nodeProperties() returns [string?, string?, string?]|LexicalError|ParsingError {
+        string? tagHandle = ();
+        string? tag = ();
+        string? anchor = ();
+
+        match self.tokenBuffer.token {
+            TAG|TAG_HANDLE => {
+                [tag, tagHandle] = check self.nodeTagHandle();
+                anchor = check self.nodeAnchor();
+            }
+            ANCHOR => {
+                anchor = check self.nodeAnchor();
+                [tag, tagHandle] = check self.nodeTagHandle();
+            }
+        }
+
+        return [tagHandle, tag, anchor];
+    }
+
     private function appendData(map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
@@ -623,7 +650,7 @@ class Parser {
             PLANAR_CHAR => {
                 return self.planarScalar();
             }
-            SEQUENCE_START => {
+            SEQUENCE_START|SEQUENCE_ENTRY => {
                 return SEQUENCE;
             }
             MAPPING_START => {
@@ -636,7 +663,6 @@ class Parser {
 
                 return self.blockScalar(self.currentToken.token == FOLDED);
             }
-            // TODO: Consider block nodes
         }
         return self.generateError(check self.formatErrorMessage(1, "<data-node>", self.prevToken));
     }

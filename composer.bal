@@ -1,6 +1,7 @@
 class Composer {
     Parser parser;
     private Event? buffer = ();
+    private map<anydata> anchorBuffer = {};
 
     function init(Parser parser) {
         self.parser = parser;
@@ -133,24 +134,50 @@ class Composer {
     // }
 
     private function composeNode(Event event, boolean insideMapping = false) returns anydata|LexicalError|ParsingError|ComposingError {
+        anydata output;
 
         // Check for +SEQ
         if event is StartEvent && event.startType == SEQUENCE {
-            return check self.composeSequence(event.flowStyle);
+            output = check self.composeSequence(event.flowStyle);
+            check self.checkAnchor(event, output);
+            return output;
         }
 
         // Check for +MAP
         if event is StartEvent && event.startType == MAPPING {
-            return check self.composeMapping();
+            output = check self.composeMapping();
+            check self.checkAnchor(event, output);
+            return output;
         }
 
+        // Check for block-style mappings
         if event is ScalarEvent && event.isKey && !insideMapping {
-            return check self.composeMapping(event);
+            output = check self.composeMapping(event);
+            check self.checkAnchor(event, output);
+            return output;
+        }
+
+        // Check for aliases
+        if event is AliasEvent {
+            return self.anchorBuffer.hasKey(event.alias)
+                ? self.anchorBuffer[event.alias]
+                : self.generateError(string `The anchor '${event.alias}' does not exist`);
         }
 
         // Check for SCALAR
         if event is ScalarEvent {
-            return event.value;
+            output = event.value;
+            check self.checkAnchor(event, output);
+            return output;
+        }
+    }
+
+    private function checkAnchor(StartEvent|ScalarEvent event, anydata assignedValue) returns ComposingError? {
+        if event.anchor != () {
+            if self.anchorBuffer.hasKey(<string>event.anchor) {
+                return self.generateError(string `Duplicate anchor definition of '${<string>event.anchor}'`);
+            }
+            self.anchorBuffer[<string>event.anchor] = assignedValue;
         }
     }
 
@@ -160,7 +187,7 @@ class Composer {
     # + return - Constructed Parsing Error message  
     private function generateError(string message) returns ComposingError {
         string text = "Composing Error at line "
-                        + self.parser.lexer.lineNumber.toString()
+                        + (self.parser.lexer.lineNumber + 1).toString()
                         + " index "
                         + self.parser.lexer.index.toString()
                         + ": "

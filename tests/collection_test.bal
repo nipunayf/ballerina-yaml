@@ -20,13 +20,16 @@ function collectionDataGen() returns map<[string|string[], Event[]]> {
         "nested sequence": [["- ", " - value1", " - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {value: "value2", entry: true}, {endType: SEQUENCE}, {value: "value3"}]],
         "multiple end sequences": [["- ", " - value1", "   - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {startType: SEQUENCE}, {value: "value2"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {value: "value3"}]],
         "differentiate planar value and key": [["first key: first line", " second line", "second key: value"], [{isKey: true, value: "first key"}, {value: "first line second line"}, {isKey: true, value: "second key"}, {value: "value"}]],
-        "escaping sequence with mapping" : [["first:", " - ", "   - item", "second: value"], [{isKey: true, value: "first"}, {startType: SEQUENCE}, {startType: SEQUENCE}, {value:"item"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {isKey: true, value: "second"}, {value: "value"}]]
+        "escaping sequence with mapping" : [["first:", " - ", "   - item", "second: value"], [{isKey: true, value: "first"}, {startType: SEQUENCE}, {startType: SEQUENCE}, {value:"item"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {isKey: true, value: "second"}, {value: "value"}]],
+        "block sequence with starting anchor": [["- &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, anchor: "anchor"}]],
+        "block sequence with starting tag": [["- !tag", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag"}]],
+        "block sequence with complete node properties": [["- !tag &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag", anchor: "anchor"}]]
     };
 }
 
 @test:Config {}
 function testInvalidIndentCollection() returns error? {
-    Parser parser = check new Parser(["- ", "  - value", " - value"]);
+    Parser parser = check new Parser(["- ", "  - value", " - value"]);  
 
     Event event = check parser.parse();
     test:assertEquals((<StartEvent>event).startType, SEQUENCE);
