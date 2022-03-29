@@ -103,6 +103,30 @@ class Lexer {
     # + return - If success, returns a token, else returns a Lexical Error 
     function getToken() returns Token|LexicalError {
 
+         // Check the lexeme buffer for the lexeme stored by the primary tag
+        if self.lexemeBuffer.length() > 0 {
+            self.lexeme = self.lexemeBuffer;
+            self.lexemeBuffer = "";
+
+            // Reaches the end-of-line and the primary tag is stored in the buffer
+            if self.peek() == () {
+                return self.generateToken(TAG);
+            }
+
+            // The complete primary tag is stored in the buffer
+            if self.matchRegexPattern(WHITESPACE_PATTERN) {
+                self.forward(-1);
+                return self.generateToken(TAG);
+            }
+
+            // A first portion of the primary tag is stored in the buffer
+            if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
+                return self.iterate(self.scanTagCharacter, TAG);
+            }
+
+            return self.generateError(self.formatErrorMessage("primary tag"));
+        }
+
         // Generate EOL token at the last index
         if (self.index >= self.line.length()) {
             return self.index == 0 ? self.generateToken(EMPTY_LINE) : {token: EOL};
@@ -481,25 +505,6 @@ class Lexer {
     }
 
     private function stateTagNode() returns Token|LexicalError {
-        // Check the lexeme buffer for the lexeme stored by the primary tag
-        if self.lexemeBuffer.length() > 0 {
-            self.lexeme = self.lexemeBuffer;
-            self.lexemeBuffer = "";
-
-            // The complete primary tag is stored in the buffer
-            if self.matchRegexPattern(WHITESPACE_PATTERN) {
-                self.forward(-1);
-                return self.generateToken(TAG);
-            }
-
-            // A first portion of the primary tag is stored in the buffer
-            if self.matchRegexPattern([URI_CHAR_PATTERN, WORD_PATTERN], ["!", FLOW_INDICATOR_PATTERN]) {
-                return self.iterate(self.scanTagCharacter, TAG);
-            }
-
-            return self.generateError(self.formatErrorMessage("primary tag"));
-        }
-
         // Scan the anchor node
         if self.peek() == "&" {
             self.forward();
@@ -868,6 +873,12 @@ class Lexer {
             // Scan the word of the name tag.
             if (self.matchRegexPattern(WORD_PATTERN)) {
                 self.lexeme += <string>self.peek();
+                // Store the complete primary tag if another '!' cannot be detected.
+                if differentiate && self.peek(1) == () {
+                    self.lexemeBuffer = self.lexeme.substring(1);
+                    self.lexeme = "!";
+                    return true;
+                }
                 return false;
             }
 
