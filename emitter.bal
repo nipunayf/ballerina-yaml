@@ -24,7 +24,7 @@ function emit(Event[] events, int indentationPolicy = 2) returns string[]|Emitti
 }
 
 function write(EmitterState state) returns EmittingError? {
-    Event event = state.events.remove(0);
+    Event event = getEvent(state);
 
     // Write block sequence
     if event is StartEvent && event.startType == SEQUENCE {
@@ -33,7 +33,8 @@ function write(EmitterState state) returns EmittingError? {
 }
 
 function writeBlockSequence(EmitterState state) returns EmittingError? {
-    Event event = state.events.remove(0);
+    Event event = getEvent(state);
+    boolean emptySequence = true;
 
     while true {
         // Write scalar event
@@ -44,13 +45,24 @@ function writeBlockSequence(EmitterState state) returns EmittingError? {
         if event is EndEvent {
             match event.endType {
                 SEQUENCE|STREAM => {
+                    if emptySequence {
+                        state.output.push("-");
+                    }
                     break;
                 }
             }
         }
 
-        event = state.events.remove(0);
+        event = getEvent(state);
+        emptySequence = false;
     }
+}
+
+function getEvent(EmitterState state) returns Event {
+    if state.events.length() < 1 {
+        return {endType: STREAM};
+    }
+    return state.events.remove(0);
 }
 
 # Generates a Emitting Error.
@@ -58,5 +70,5 @@ function writeBlockSequence(EmitterState state) returns EmittingError? {
 # + message - Error message
 # + return - Constructed Parsing Error message  
 function generateError(string message) returns EmittingError {
-    return error EmittingError(string `Serializing Error: ${message}.`);
+    return error EmittingError(string `Emitting Error: ${message}.`);
 }
