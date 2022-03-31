@@ -30,6 +30,10 @@ function write(EmitterState state) returns EmittingError? {
     if event is StartEvent && event.startType == SEQUENCE {
         check writeBlockSequence(state);
     }
+
+    if event is ScalarEvent {
+        state.output.push(event.value == () ? "" : <string>event.value);
+    }
 }
 
 function writeBlockSequence(EmitterState state) returns EmittingError? {

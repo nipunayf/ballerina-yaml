@@ -11,6 +11,7 @@ function testWritingSimpleEvent(Event[] events, string[] expectedOutput) returns
 function simpleEventDataGen() returns map<[Event[], string[]]> {
     return {
         "empty block sequence": [[{startType: SEQUENCE}], ["-"]],
-        "block sequence": [[{startType: SEQUENCE}, {value: "value1"}, {value: "value2" }, {endType: SEQUENCE}], ["- value1", "- value2"]]
+        "block sequence": [[{startType: SEQUENCE}, {value: "value1"}, {value: "value2" }, {endType: SEQUENCE}], ["- value1", "- value2"]],
+        "single value": [[{value: "value"}], ["value"]]
     };
 }
