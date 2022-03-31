@@ -1,7 +1,12 @@
 class Serializer {
-    function serialize(anydata data) returns Event[]|SerializingError {
-        Event[] events = [];
+    int blockLevel;
 
+    function init(int blockLevel = 1) {
+        self.blockLevel = blockLevel;
+    }
+
+    function serialize(anydata data, int depthLevel = 0) returns Event[]|SerializingError {
+        Event[] events = [];
         // TODO: check if the data is a custom tag
 
         // TODO: check if the current schema is CORE_SCHEMA
@@ -10,10 +15,10 @@ class Serializer {
 
         // Convert sequence
         if data is anydata[] {
-            events.push({startType: SEQUENCE});
+            events.push({startType: SEQUENCE, flowStyle: self.blockLevel <= depthLevel});
 
             foreach anydata dataItem in data {
-                events = self.combineArray(events, check self.serialize(dataItem));
+                events = self.combineArray(events, check self.serialize(dataItem, depthLevel + 1));
             }
 
             events.push({endType: SEQUENCE});
@@ -22,12 +27,12 @@ class Serializer {
 
         // Convert mapping
         if data is map<anydata> {
-            events.push({startType: MAPPING});
+            events.push({startType: MAPPING, flowStyle: self.blockLevel <= depthLevel});
 
             string[] keys = data.keys();
             foreach string key in keys {
                 events.push({value: key, isKey: true});
-                events = self.combineArray(events, check self.serialize(data[key]));
+                events = self.combineArray(events, check self.serialize(data[key], depthLevel + 1));
             }
 
             events.push({endType: MAPPING});
