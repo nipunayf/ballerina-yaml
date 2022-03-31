@@ -9,3 +9,6 @@ type ComposingError distinct error;
 
 # Represents an error caused by serializer
 type SerializingError distinct error;
+
+# Represents an error caused by emitter
+type EmittingError distinct error;

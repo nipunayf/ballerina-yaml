@@ -55,7 +55,7 @@ class Serializer {
         return returnEventsList;
     }
 
-    # Generates a Parsing Error Error.
+    # Generates a Parsing Error.
     #
     # + message - Error message
     # + return - Constructed Parsing Error message  
