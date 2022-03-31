@@ -6,3 +6,6 @@ type ParsingError distinct error;
 
 # Represents an error caused by composer
 type ComposingError distinct error;
+
+# Represents an error caused by serializer
+type SerializingError distinct error;
