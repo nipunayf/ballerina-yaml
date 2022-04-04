@@ -110,6 +110,15 @@ function writeBlockMapping(EmitterState state, string whitespace) returns Emitti
             state.output.push(line);
         }
 
+        if event is StartEvent {
+            state.output.push(line);
+            match event.startType {
+                MAPPING => {
+                    check writeBlockMapping(state, whitespace + state.indent);
+                }
+            }
+        }
+
         line = "";
         event = getEvent(state);
     }
