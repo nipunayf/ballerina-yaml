@@ -28,16 +28,58 @@ function write(EmitterState state) returns EmittingError? {
 
     // Write block sequence
     if event is StartEvent && event.startType == SEQUENCE {
-        check writeBlockSequence(state, "");
+        if event.flowStyle {
+            state.output.push(check writeFlowSequence(state));
+        } else {
+            check writeBlockSequence(state, "");
+        }
+        return;
     }
 
     if event is StartEvent && event.startType == MAPPING {
         check writeBlockMapping(state, "");
+        return;
     }
 
     if event is ScalarEvent {
         state.output.push(event.value == () ? "" : <string>event.value);
+        return;
     }
+}
+
+function writeFlowSequence(EmitterState state) returns string|EmittingError {
+    string line = "[";
+    Event event = getEvent(state);
+
+    while true {
+        if event is EndEvent {
+            match event.endType {
+                SEQUENCE|STREAM => {
+                    break;
+                }
+            }
+        }
+
+        if event is ScalarEvent {
+            line += event.value.toString();
+        }
+
+        if event is StartEvent {
+            match event.startType {
+                SEQUENCE => {
+                    line += check writeFlowSequence(state);
+                }
+            }
+        }
+
+        line += ", ";
+        event = getEvent(state);
+    }
+    
+    // Trim the trailing separator
+    line = line.length() > 2 ? line.substring(0, line.length() - 2) : line;
+    line += "]";
+    return line;
 }
 
 function writeBlockSequence(EmitterState state, string whitespace) returns EmittingError? {
@@ -62,13 +104,21 @@ function writeBlockSequence(EmitterState state, string whitespace) returns Emitt
         }
 
         if event is StartEvent {
-            state.output.push(whitespace + "-");
             match event.startType {
                 SEQUENCE => {
-                    check writeBlockSequence(state, whitespace + state.indent);
+                    if event.flowStyle {
+                        state.output.push(whitespace + "- " + check writeFlowSequence(state));
+                    } else {
+                        state.output.push(whitespace + "-");
+                        check writeBlockSequence(state, whitespace);
+                    }
                 }
                 MAPPING => {
-                    check writeBlockMapping(state, whitespace + state.indent);
+                    if event.flowStyle {
+
+                    } else {
+                        check writeBlockMapping(state, whitespace + state.indent);
+                    }
                 }
             }
         }
