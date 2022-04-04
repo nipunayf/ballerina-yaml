@@ -31,6 +31,10 @@ function write(EmitterState state) returns EmittingError? {
         check writeBlockSequence(state, "");
     }
 
+    if event is StartEvent && event.startType == MAPPING {
+        check writeBlockMapping(state, "");
+    }
+
     if event is ScalarEvent {
         state.output.push(event.value == () ? "" : <string>event.value);
     }
@@ -71,6 +75,43 @@ function writeBlockSequence(EmitterState state, string whitespace) returns Emitt
 
         event = getEvent(state);
         emptySequence = false;
+    }
+}
+
+function writeBlockMapping(EmitterState state, string whitespace) returns EmittingError? {
+    Event event = getEvent(state);
+    string line;
+
+    while true {
+        line = "";
+        if event is EndEvent {
+            match event.endType {
+                MAPPING|STREAM => {
+                    break;
+                }
+            }
+        }
+
+        if event is ScalarEvent {
+            if event.isKey {
+                line += whitespace + event.value.toString() + ": ";
+            } else {
+                return generateError("Expected a key before a value in mapping");
+            }
+        }
+
+        event = getEvent(state);
+
+        if event is ScalarEvent {
+            if event.isKey {
+                return generateError("Expected a value after key");
+            }
+            line += event.value.toString();
+            state.output.push(line);
+        }
+
+        line = "";
+        event = getEvent(state);
     }
 }
 
