@@ -62,13 +62,13 @@ function writeBlockSequence(EmitterState state, string whitespace) returns Emitt
         }
 
         if event is StartEvent {
+            state.output.push(whitespace + "-");
             match event.startType {
                 SEQUENCE => {
-                    state.output.push(whitespace + "-");
                     check writeBlockSequence(state, whitespace + state.indent);
                 }
                 MAPPING => {
-
+                    check writeBlockMapping(state, whitespace + state.indent);
                 }
             }
         }
@@ -115,6 +115,9 @@ function writeBlockMapping(EmitterState state, string whitespace) returns Emitti
             match event.startType {
                 MAPPING => {
                     check writeBlockMapping(state, whitespace + state.indent);
+                }
+                SEQUENCE => {
+                    check writeBlockSequence(state, whitespace);
                 }
             }
         }
