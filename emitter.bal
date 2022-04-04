@@ -28,7 +28,7 @@ function write(EmitterState state) returns EmittingError? {
 
     // Write block sequence
     if event is StartEvent && event.startType == SEQUENCE {
-        check writeBlockSequence(state);
+        check writeBlockSequence(state, "");
     }
 
     if event is ScalarEvent {
@@ -36,23 +36,35 @@ function write(EmitterState state) returns EmittingError? {
     }
 }
 
-function writeBlockSequence(EmitterState state) returns EmittingError? {
+function writeBlockSequence(EmitterState state, string whitespace) returns EmittingError? {
     Event event = getEvent(state);
     boolean emptySequence = true;
 
     while true {
         // Write scalar event
         if event is ScalarEvent {
-            state.output.push(string `- ${event.value.toString()}`);
+            state.output.push(string `${whitespace}- ${event.value.toString()}`);
         }
 
         if event is EndEvent {
             match event.endType {
                 SEQUENCE|STREAM => {
                     if emptySequence {
-                        state.output.push("-");
+                        state.output.push(whitespace + "-");
                     }
                     break;
+                }
+            }
+        }
+
+        if event is StartEvent {
+            match event.startType {
+                SEQUENCE => {
+                    state.output.push(whitespace + "-");
+                    check writeBlockSequence(state, whitespace + state.indent);
+                }
+                MAPPING => {
+
                 }
             }
         }
