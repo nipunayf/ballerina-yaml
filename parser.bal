@@ -44,8 +44,7 @@ class Parser {
     public function parse() returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
-            Event event = self.eventBuffer.remove(0);
-            return event;
+            return self.eventBuffer.shift();
         }
 
         self.lexer.state = LEXER_START;
@@ -142,39 +141,48 @@ class Parser {
                 return self.appendData({tagHandle, tag, anchor});
             }
             MAPPING_VALUE => { // Empty node as the key
+                Indentation? indentation = self.currentToken.indentation;
+                if indentation == () {
+                    return self.generateError("Empty key requires an indentation");
+                }
                 check self.separate();
-                return {
-                    value: (),
-                    isKey: true
-                };
+                match indentation.change {
+                    1 => { // Increase in indent
+                        self.eventBuffer.push({value: ()});
+                        return {startType: MAPPING};
+                    }
+                    0 => { // Same indent
+                        return {value: ()};
+                    }
+                    -1 => { // Decrease in indent
+                        foreach EventType collectionItem in indentation.collection {
+                            self.eventBuffer.push({endType: collectionItem});
+                        }
+                        return self.eventBuffer.shift();
+                    }
+                }
             }
             MAPPING_KEY => { // Explicit key
                 check self.separate();
                 return self.appendData();
             }
             SEQUENCE_ENTRY => {
-                match self.currentToken.value {
-                    "+" => {
+                if self.currentToken.indentation == () {
+                    return self.generateError("Block sequence must have an indentation");
+                }
+                match (<Indentation>self.currentToken.indentation).change {
+                    1 => { // Indent increase
                         return {startType: SEQUENCE};
                     }
-                    "" => {
+                    0 => { // Sequence entry
                         self.sequenceEntry = true;
                         return self.parse();
                     }
-                    _ => {
-                        if self.currentToken.value[0] != "-" {
-                            return self.generateError("Invalid <sequence-entry> token");
+                    -1 => { //Indent decrease 
+                        foreach EventType collectionItem in (<Indentation>self.currentToken.indentation).collection {
+                            self.eventBuffer.push({endType: collectionItem});
                         }
-                        int decrease = <int>(check self.processTypeCastingError('int:fromString(self.currentToken.value.substring(1))));
-                        if decrease < 1 {
-                            return self.generateError("Invalid <sequence-entry> token");
-                        }
-                        if decrease > 1 {
-                            foreach int i in 2 ... decrease {
-                                self.eventBuffer.push({endType: SEQUENCE});
-                            }
-                        }
-                        return {endType: SEQUENCE};
+                        return self.eventBuffer.shift();
                     }
                 }
             }
@@ -369,6 +377,12 @@ class Parser {
             check self.checkToken();
         }
 
+        self.lexer.state = LEXER_START;
+        check self.checkToken(peek = true);
+        if self.tokenBuffer.token == MAPPING_VALUE && !isFirstLine {
+            return self.generateError("Single-quoted keys cannot span multiple lines");
+        }
+
         return lexemeBuffer;
     }
 
@@ -383,7 +397,7 @@ class Parser {
         while true {
             match self.tokenBuffer.token {
                 PLANAR_CHAR => {
-                    if self.tokenBuffer.indentation {
+                    if self.tokenBuffer.indentation != () {
                         break;
                     }
                     check self.checkToken();
@@ -599,21 +613,42 @@ class Parser {
         string|EventType value = check self.content(peeked);
         Event? buffer = ();
 
-        if self.currentToken.indentation {
-            int decrease = self.lexer.getSequenceIndentChange();
-            if decrease > 1 {
-                foreach int i in 2 ... decrease {
-                    self.eventBuffer.push({endType: SEQUENCE});
-                }
-                buffer = {endType: SEQUENCE};
-            }
-            if decrease == 1 {
-                buffer = {endType: SEQUENCE};
-            }
-        }
+        Indentation? indentation = self.currentToken.indentation;
+        // if self.currentToken.indentation {
+        //     int decrease = self.lexer.getSequenceIndentChange();
+        //     if decrease > 1 {
+        //         foreach int i in 2 ... decrease {
+        //             self.eventBuffer.push({endType: SEQUENCE});
+        //         }
+        //         buffer = {endType: SEQUENCE};
+        //     }
+        //     if decrease == 1 {
+        //         buffer = {endType: SEQUENCE};
+        //     }
+        // }
 
         // Check if the current node is a key
-        boolean isKey = check self.isNodeKey();
+        _ = check self.isNodeKey();
+
+        if indentation is Indentation {
+            match indentation.change {
+                1 => { // Increased
+                    // Block sequence
+                    if self.currentToken.token == SEQUENCE_ENTRY {
+                        return self.constructEvent(tagStructure, {startType: indentation.collection.pop()});
+                    }
+                    // Block mapping
+                    self.eventBuffer.push({value});
+                    return self.constructEvent(tagStructure, {startType: indentation.collection.pop()});
+                }
+                -1 => { // Decreased 
+                    buffer = {endType: indentation.collection.pop()};
+                    foreach EventType collectionItem in indentation.collection {
+                        self.eventBuffer.push({endType: collectionItem});
+                    }
+                }
+            }
+        }
 
         boolean entry = false;
         if self.sequenceEntry {
@@ -621,7 +656,7 @@ class Parser {
             self.sequenceEntry = false;
         }
 
-        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, isKey, entry} : {value: value, isKey, entry});
+        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, entry} : {value: value, entry});
 
         if buffer == () {
             return event;

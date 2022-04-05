@@ -55,7 +55,9 @@ function testFlowKeyEvent(string line, string? key, string? value) returns error
     Parser parser = check new Parser([line]);
 
     Event event = check parser.parse();
-    test:assertTrue((<ScalarEvent>event).isKey);
+    test:assertEquals((<StartEvent>event).startType, MAPPING);
+
+    event = check parser.parse();
     test:assertEquals((<ScalarEvent>event).value, key);
 
     event = check parser.parse();

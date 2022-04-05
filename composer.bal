@@ -82,7 +82,7 @@ class Composer {
                         if !flowStyle {
                             break;
                         }
-                        return self.generateError("Expected a sequence end event");
+                        return self.generateError("Expected a mapping end event");
                     }
                 }
             }
@@ -137,7 +137,7 @@ class Composer {
         anydata output;
 
         // Check for +SEQ
-            if event is StartEvent && event.startType == SEQUENCE {
+        if event is StartEvent && event.startType == SEQUENCE {
             output = check self.composeSequence(event.flowStyle);
             check self.checkAnchor(event, output);
             return output;
