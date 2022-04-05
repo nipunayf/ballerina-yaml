@@ -73,6 +73,9 @@ function writeFlowSequence(EmitterState state) returns string|EmittingError {
                 SEQUENCE => {
                     line += check writeFlowSequence(state);
                 }
+                MAPPING => {
+                    line += check writeFlowMapping(state);
+                }
             }
         }
 
@@ -167,6 +170,9 @@ function writeFlowMapping(EmitterState state) returns string|EmittingError {
             match event.startType {
                 MAPPING => {
                     line += check writeFlowMapping(state);
+                }
+                SEQUENCE => {
+                    line += check writeFlowSequence(state);
                 }
             }
         }
