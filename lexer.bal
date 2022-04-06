@@ -308,6 +308,7 @@ class Lexer {
                 return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
             }
             "*" => {
+                self.forward();
                 return self.scanMappingValueKey(ALIAS, self.scanAnchorName);
             }
             "%" => { // Directive line
