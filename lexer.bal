@@ -1082,7 +1082,9 @@ class Lexer {
         Token token = check self.iterate(process, outputToken);
 
         // Ignore whitespace until a character is found
+        int numWhitespace = 0;
         while self.peek() == " " {
+            numWhitespace += 1;
             self.forward();
         }
 
@@ -1095,7 +1097,9 @@ class Lexer {
         }
         if self.peek() == ":" {
             token.indentation = check self.checkIndent(startIndent);
+            return token;
         }
+        self.forward(-numWhitespace);
         return token;
     }
 
@@ -1103,7 +1107,9 @@ class Lexer {
         Token token = self.generateToken(outputToken);
 
         // Ignore whitespace until a character is found
+        int numWhitespace = 0;
         while self.peek() == " " {
+            numWhitespace += 1;
             self.forward();
         }
 
@@ -1118,7 +1124,9 @@ class Lexer {
         if self.peek() == ":" {
             token.indentation = check self.checkIndent(self.delimiterStartIndex);
             self.delimiterStartIndex = -1;
+            return token;
         }
+        self.forward(-numWhitespace);
         return token;
     }
 
