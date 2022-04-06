@@ -67,6 +67,9 @@ class Lexer {
     # Minimum indentation required to the current line
     int indent = -1;
 
+    # Represent the number of opened flow collections  
+    int numOpenedFlowCollections = 0;
+
     # Start index of the scalars with delimiter.
     int delimiterStartIndex = -1;
 
@@ -397,16 +400,20 @@ class Lexer {
             }
             "[" => {
                 check self.assertIndent(1);
+                self.numOpenedFlowCollections += 1;
                 return self.generateToken(SEQUENCE_START);
             }
             "]" => {
+                self.numOpenedFlowCollections -= 1;
                 return self.generateToken(SEQUENCE_END);
             }
             "{" => {
                 check self.assertIndent(1);
+                self.numOpenedFlowCollections += 1;
                 return self.generateToken(MAPPING_START);
             }
             "}" => {
+                self.numOpenedFlowCollections -= 1;
                 return self.generateToken(MAPPING_END);
             }
             "|"|">" => { // Block scalars
@@ -1081,6 +1088,10 @@ class Lexer {
         int startIndent = self.index;
         Token token = check self.iterate(process, outputToken);
 
+        if self.numOpenedFlowCollections > 0 {
+            return token;
+        }
+
         // Ignore whitespace until a character is found
         int numWhitespace = 0;
         while self.peek() == " " {
@@ -1111,6 +1122,10 @@ class Lexer {
         while self.peek() == " " {
             numWhitespace += 1;
             self.forward();
+        }
+
+        if self.numOpenedFlowCollections > 0 {
+            return token;
         }
 
         if self.index < self.delimiterStartIndex { // Not sufficient indent to process as a value token

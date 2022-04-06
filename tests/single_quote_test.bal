@@ -78,29 +78,28 @@ function flowKeyDataGen() returns map<[string, string?, string?]> {
     };
 }
 
+@test:Config {
+    dataProvider: multipleMapEntriesDataGen
+}
+function testMultipleMapEntriesEvent(string[] arr, string?[] keys, string?[] values) returns error? {
+    Parser parser = check new Parser(arr);
 
-// TODO: Fix flow style mapping
-// @test:Config {
-//     dataProvider: multipleMapEntriesDataGen
-// }
-// function testMultipleMapEntriesEvent(string[] arr, string?[] keys, string?[] values) returns error? {
-//     Parser parser = check new Parser(arr);
+    Event event = check parser.parse();
+    test:assertEquals((<StartEvent>event).startType, MAPPING);
 
-//     foreach int i in 0 ... values.length() - 1 {
-//         parser.lexer.context = FLOW_IN;
-//         Event event = check parser.parse();
-//         test:assertTrue((<ScalarEvent>event).isKey);
-//         test:assertEquals((<ScalarEvent>event).value, keys[i]);
+    foreach int i in 0 ... values.length() - 1 {
+        event = check parser.parse();
+        test:assertEquals((<ScalarEvent>event).value, keys[i]);
 
-//         event = check parser.parse();
-//         test:assertEquals((<ScalarEvent>event).value, values[i]);
-//     }
-// }
+        event = check parser.parse();
+        test:assertEquals((<ScalarEvent>event).value, values[i]);
+    }
+}
 
-// function multipleMapEntriesDataGen() returns map<[string[], string?[], string?[]]> {
-//     return {
-//         "multiple values": [["{first: second ,", "third: forth"], ["first", "third"], ["second", "forth"]],
-//         "ends with comma": [["{first: second ,", "third: forth ,"], ["first", "third"], ["second", "forth"]],
-//         "multiline span": [["key : ", " ", "", " value"], ["key"], ["value"]]
-//     };
-// }
+function multipleMapEntriesDataGen() returns map<[string[], string?[], string?[]]> {
+    return {
+        "multiple values": [["{first: second ,", "third: forth"], ["first", "third"], ["second", "forth"]],
+        "ends with comma": [["{first: second ,", "third: forth ,"], ["first", "third"], ["second", "forth"]],
+        "multiline span": [["key : ", " ", "", " value"], ["key"], ["value"]]
+    };
+}
