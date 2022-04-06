@@ -70,7 +70,8 @@ function flowKeyDataGen() returns map<[string, string?, string?]> {
         // "omitted value": ["omitted value: ", "omitted value", ()],
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
-        "json-key with space": ["'json-key': \"json\"", "json-key", "json"],
+        "json-key with space value": ["'json-key': \"json\"", "json-key", "json"],
+        "json-key with space key": ["'json-key' : \"json\"", "json-key", "json"],
         "explicit": ["? explicit: value", "explicit", "value"],
         "double mapping values": ["'json-key'::planar", "json-key", ":planar"],
         "no key": [": value", (), "value"]

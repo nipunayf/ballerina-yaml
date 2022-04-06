@@ -1080,6 +1080,11 @@ class Lexer {
         int startIndent = self.index;
         Token token = check self.iterate(process, outputToken);
 
+        // Ignore whitespace until a character is found
+        while self.peek() == " " {
+            self.forward();
+        }
+
         if err is LexicalError { // Not sufficient indent to process as a value token
             if self.peek() == ":" { // The token is a mapping key
                 token.indentation = check self.checkIndent(startIndent);
@@ -1095,6 +1100,11 @@ class Lexer {
 
     private function scanMappingValueKeyWithDelimiter(YAMLToken outputToken) returns Token|LexicalError {
         Token token = self.generateToken(outputToken);
+
+        // Ignore whitespace until a character is found
+        while self.peek() == " " {
+            self.forward();
+        }
 
         if self.index < self.delimiterStartIndex { // Not sufficient indent to process as a value token
             if self.peek() == ":" { // The token is a mapping key
