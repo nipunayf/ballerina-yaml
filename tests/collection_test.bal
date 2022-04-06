@@ -23,7 +23,8 @@ function collectionDataGen() returns map<[string|string[], Event[]]> {
         "escaping sequence with mapping": [["first:", " - ", "   - item", "second: value"], [{startType: MAPPING}, {value: "first"}, {startType: SEQUENCE}, {startType: SEQUENCE}, {value: "item"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {value: "second"}, {value: "value"}]],
         "block sequence with starting anchor": [["- &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, anchor: "anchor"}]],
         "block sequence with starting tag": [["- !tag", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag"}]],
-        "block sequence with complete node properties": [["- !tag &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag", anchor: "anchor"}]]
+        "block sequence with complete node properties": [["- !tag &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag", anchor: "anchor"}]],
+        "escaping multiple mappings": [["first: ", "  second: ", "    third: ", "forth: value"], [{startType: MAPPING}, {value: "first"}, {startType: MAPPING}, {value: "second"}, {startType: MAPPING}, {value: "third"}, {endType: MAPPING}, {endType: MAPPING}, {value: "forth"}]]
     };
 }
 

@@ -642,7 +642,7 @@ class Parser {
                     return self.constructEvent(tagStructure, {startType: indentation.collection.pop()});
                 }
                 -1 => { // Decreased 
-                    buffer = {endType: indentation.collection.pop()};
+                    buffer = {endType: indentation.collection.shift()};
                     foreach EventType collectionItem in indentation.collection {
                         self.eventBuffer.push({endType: collectionItem});
                     }
