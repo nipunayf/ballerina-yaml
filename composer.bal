@@ -68,10 +68,7 @@ class Composer {
             if event is EndEvent {
                 match event.endType {
                     MAPPING => {
-                        if flowStyle {
-                            break;
-                        }
-                        return self.generateError("Expected a mapping start event before end event");
+                        break;
                     }
                     SEQUENCE => {
                         return self.generateError("Expected a mapping end event");

@@ -187,7 +187,7 @@ class Parser {
                 }
             }
             MAPPING_START => {
-                return {startType: MAPPING};
+                return {startType: MAPPING, flowStyle: true};
             }
             SEQUENCE_START => {
                 return {startType: SEQUENCE, flowStyle: true};
@@ -634,7 +634,7 @@ class Parser {
             match indentation.change {
                 1 => { // Increased
                     // Block sequence
-                    if self.currentToken.token == SEQUENCE_ENTRY {
+                    if value is SEQUENCE {
                         return self.constructEvent(tagStructure, {startType: indentation.collection.pop()});
                     }
                     // Block mapping
