@@ -946,7 +946,7 @@ class Lexer {
     # + mapIndex - If the current token is a mapping key, then the starting index of it.
     # + return - Change of indentation. Else, an indentation error on failure
     public function checkIndent(int? mapIndex = ()) returns Indentation|LexicalError {
-        int startIndex = mapIndex == () ? self.index : mapIndex;
+        int startIndex = mapIndex == () ? self.index - 1 : mapIndex;
 
         // Check if the current indent exists with a different type
         EventType[] existingIndentType = from Indent indent in self.indents
