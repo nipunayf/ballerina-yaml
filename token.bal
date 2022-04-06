@@ -1,8 +1,19 @@
 type Token record {|
     YAMLToken token;
     string value = "";
-    boolean indentation = false;
+    Indentation? indentation = ();
 |};
+
+# Represents indentation change caused by block scalars.
+#
+# + collection - List of opened or closed collections.
+# + change - +1 indent increased, -1 indent decreased, 0 indent has not changed.
+type Indentation record {|
+    EventType[] collection;
+    IndentChange change;
+|};
+
+type IndentChange -1|0|1;
 
 enum YAMLToken {
     BOM,

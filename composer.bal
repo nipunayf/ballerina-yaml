@@ -60,20 +60,15 @@ class Composer {
         return sequence;
     }
 
-    private function composeMapping(Event? eventParam = ()) returns map<anydata>|LexicalError|ParsingError|ComposingError {
+    private function composeMapping(boolean flowStyle) returns map<anydata>|LexicalError|ParsingError|ComposingError {
         map<anydata> structure = {};
-        boolean flowStyle = eventParam == ();
-
-        Event event = eventParam == () ? check self.parser.parse() : eventParam;
+        Event event = check self.parser.parse();
 
         while true {
             if event is EndEvent {
                 match event.endType {
                     MAPPING => {
-                        if flowStyle {
-                            break;
-                        }
-                        return self.generateError("Expected a mapping start event before end event");
+                        break;
                     }
                     SEQUENCE => {
                         return self.generateError("Expected a mapping end event");
@@ -82,7 +77,7 @@ class Composer {
                         if !flowStyle {
                             break;
                         }
-                        return self.generateError("Expected a sequence end event");
+                        return self.generateError("Expected a mapping end event");
                     }
                 }
             }
@@ -94,21 +89,13 @@ class Composer {
                 return self.generateError("Expected a sequence end event");
             }
 
-            if !(<StartEvent|ScalarEvent>event).isKey {
+            if !(event is StartEvent|ScalarEvent) {
                 return self.generateError("Expected a key for a mapping");
             }
-            anydata key = check self.composeNode(event, true);
 
+            anydata key = check self.composeNode(event);
             event = check self.parser.parse();
-            anydata value;
-            if (<StartEvent|ScalarEvent>event).isKey {
-                if flowStyle {
-                    return self.generateError("Cannot have block mapping inside a flow mapping");
-                }
-                value = check self.composeMapping(event);
-            } else {
-                value = check self.composeNode(event);
-            }
+            anydata value = check self.composeNode(event);
 
             structure[key.toString()] = value;
             if self.buffer == () {
@@ -133,7 +120,7 @@ class Composer {
 
     // }
 
-    private function composeNode(Event event, boolean insideMapping = false) returns anydata|LexicalError|ParsingError|ComposingError {
+    private function composeNode(Event event) returns anydata|LexicalError|ParsingError|ComposingError {
         anydata output;
 
         // Check for +SEQ
@@ -145,14 +132,7 @@ class Composer {
 
         // Check for +MAP
         if event is StartEvent && event.startType == MAPPING {
-            output = check self.composeMapping();
-            check self.checkAnchor(event, output);
-            return output;
-        }
-
-        // Check for block-style mappings
-        if event is ScalarEvent && event.isKey && !insideMapping {
-            output = check self.composeMapping(event);
+            output = check self.composeMapping(event.flowStyle);
             check self.checkAnchor(event, output);
             return output;
         }

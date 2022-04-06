@@ -9,10 +9,7 @@ type NodeEvent record {|
     string? tag = ();
     string? tagHandle  = ();
     boolean isKey = false;
-    boolean flowStyle = false;
     boolean entry = false;
-    // boolean implicit = true;
-    // string style = ;
 |};
 
 type ScalarEvent record {|
@@ -29,6 +26,7 @@ type DocumentStartEvent record {|
 
 type StartEvent record {|
     EventType startType;
+    boolean flowStyle = false;
     *NodeEvent;
 |};
 
