@@ -827,7 +827,7 @@ class Parser {
     private function trimTailWhitespace(string value) returns string {
         int i = value.length() - 1;
 
-        if i < 1 {
+        if i < 0 {
             return "";
         }
 

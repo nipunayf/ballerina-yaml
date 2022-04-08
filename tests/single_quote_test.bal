@@ -32,7 +32,8 @@ function planarDataGen() returns map<[string, string]> {
         "-": ["--", "--"],
         "ignore-comment": ["plain #comment", "plain"],
         "#": ["plain#comment", "plain#comment"],
-        "space": ["plain space", "plain space"]
+        "space": ["plain space", "plain space"],
+        "single character": ["a", "a"]
     };
 }
 

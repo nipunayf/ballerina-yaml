@@ -14,7 +14,8 @@ function testBlockCollectionEvents(string|string[] line, Event[] eventStream) re
 
 function collectionDataGen() returns map<[string|string[], Event[]]> {
     return {
-        "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
+        // "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
+        "single character sequence": ["- a", [{startType: SEQUENCE}, {value: "a"}]],
         "compact sequence in-line": ["- - value", [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value"}]],
         "empty sequence entry": ["- ", [{startType: SEQUENCE}, {endType: STREAM}]],
         "nested sequence": [["- ", " - value1", " - value2", "- value3"], [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value1"}, {value: "value2", entry: true}, {endType: SEQUENCE}, {value: "value3"}]],
@@ -59,7 +60,7 @@ function testIndentationOfBlockSequence() returns error? {
     foreach int i in 0 ... 3 {
         _ = check parser.parse();
         test:assertEquals(parser.lexer.indent, indentMapping[i][0]);
-        // test:assertEquals(parser.lexer.seqIndents.length(), indentMapping[i][1]);
+        test:assertEquals(parser.lexer.indents.length(), indentMapping[i][1]);
     }
 }
 
@@ -79,6 +80,6 @@ function testIndentationOfBlockMapping() returns error? {
         }
 
         test:assertEquals(lexer.indent, indentMapping[i][0]);
-        // test:assertEquals(lexer.mapIndents.length(), indentMapping[i][1]);
+        test:assertEquals(lexer.indents.length(), indentMapping[i][1]);
     }
 }
