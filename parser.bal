@@ -754,6 +754,7 @@ class Parser {
                     if self.tokenBuffer.token != EOL {
                         return;
                     }
+                    check self.checkToken();
                 }
                 _ => {
                     return;

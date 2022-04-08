@@ -3,10 +3,10 @@ import ballerina/test;
 @test:Config {
     dataProvider: collectionDataGen
 }
-function testBlockCollectionEvents(string|string[] line, Event[] eventStream) returns error? {
+function testBlockCollectionEvents(string|string[] line, Event[] eventTree) returns error? {
     Parser parser = check new Parser((line is string) ? [line] : line);
 
-    foreach Event item in eventStream {
+    foreach Event item in eventTree {
         Event event = check parser.parse();
         test:assertEquals(event, item);
     }
@@ -14,7 +14,7 @@ function testBlockCollectionEvents(string|string[] line, Event[] eventStream) re
 
 function collectionDataGen() returns map<[string|string[], Event[]]> {
     return {
-        // "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
+        "single element": ["- value", [{startType: SEQUENCE}, {value: "value"}]],
         "single character sequence": ["- a", [{startType: SEQUENCE}, {value: "a"}]],
         "compact sequence in-line": ["- - value", [{startType: SEQUENCE}, {startType: SEQUENCE}, {value: "value"}]],
         "empty sequence entry": ["- ", [{startType: SEQUENCE}, {endType: STREAM}]],

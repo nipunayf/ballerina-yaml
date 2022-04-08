@@ -44,6 +44,25 @@ function blockScalarEventDataGen() returns map<[string[], string]> {
     };
 }
 
+// @test:Config {
+//     dataProvider: blockScalarInCollection
+// }
+// function testBlockScalarsInCollection(string[] lines, Event[] eventTree) returns error? {
+//     Parser parser = check new Parser(lines);
+
+//     foreach Event item in eventTree {
+//         Event event = check parser.parse();
+//         test:assertEquals(event, item);
+//     }
+// }
+
+// function blockScalarInCollection() returns map<[string[], Event[]]> {
+//     return {
+//         "folded scalar as mapping value": [["key1: >-", "first", "second", "key2: third"], [{startType: MAPPING}, {value: "key1"}, {value: "first second"}, {value: "key2"}, {value: "third"}]],
+//         "folded scalar as sequence entry": [["- >-", "first", "second", "- third"], [{startType: SEQUENCE}, {value: "first second"}, {value: "third"}]]
+//     };
+// }
+
 @test:Config {
     dataProvider: invalidBlockScalarEventDataGen
 }

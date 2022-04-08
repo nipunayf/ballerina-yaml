@@ -67,6 +67,9 @@ class Lexer {
     # Minimum indentation required to the current line
     int indent = -1;
 
+    # Additional indent set by the indentation indicator
+    int addIndent = 1;
+
     # Represent the number of opened flow collections  
     int numOpenedFlowCollections = 0;
 
@@ -417,7 +420,7 @@ class Lexer {
                 return self.generateToken(MAPPING_END);
             }
             "|"|">" => { // Block scalars
-                self.indent += 1;
+                self.addIndent = 1;
                 self.captureIndent = true;
                 return self.generateToken(self.peek() == "|" ? LITERAL : FOLDED);
             }
@@ -528,8 +531,8 @@ class Lexer {
     private function stateBlockHeader() returns Token|LexicalError {
         // Check for indentation indicators and adjust the current indent
         if self.matchRegexPattern("1-9") {
-            int indentationIndicator = <int>(check self.processTypeCastingError('int:fromString(<string>self.peek()))) - 1;
-            self.indent += indentationIndicator;
+            self.captureIndent = false;
+            self.addIndent += <int>(check self.processTypeCastingError('int:fromString(<string>self.peek()))) - 1;
             self.forward();
         }
 
@@ -574,12 +577,26 @@ class Lexer {
             }
         }
 
+        // Check if the line has sufficient indent to be process as a block scalar.
+        boolean hasSufficientIndent = true;
+        foreach int i in 0 ... self.indent + self.addIndent {
+            if !(self.peek() == " ") {
+                hasSufficientIndent = false;
+                break;
+            }
+            self.forward();
+        }
+
         // There is no sufficient indent to consider printable characters
-        if !self.scanIndent() {
+        if !hasSufficientIndent {
             // Generate beginning of the trailing comment
             return self.peek() == "#" ? self.generateToken(TRAILING_COMMENT)
-                //Other characters are not allowed when the indentation is less
+                // Other characters are not allowed when the indentation is less
                 : self.generateError("Insufficient indent to process literal characters");
+        }
+
+        if self.assertIndent(self.addIndent) is LexicalError {
+
         }
 
         // Generate an empty lines that have less index.
@@ -933,19 +950,6 @@ class Lexer {
         return true;
     }
 
-    # Scan the whitespace to build an indent.
-    #
-    # + return - Returns true if there are sufficient whitespace to build the indent.
-    private function scanIndent() returns boolean {
-        foreach int i in 0 ... self.indent {
-            if !(self.peek() == " ") {
-                return false;
-            }
-            self.forward();
-        }
-        return true;
-    }
-
     # Validates the indentation of block collections.
     # Increments and decrement the indentation safely.
     # If the indent is explicitly given, then the function continues for mappings.
@@ -954,43 +958,6 @@ class Lexer {
     # + return - Change of indentation. Else, an indentation error on failure
     public function checkIndent(int? mapIndex = ()) returns Indentation|LexicalError {
         int startIndex = mapIndex == () ? self.index - 1 : mapIndex;
-
-        // if existingIndentType.indexOf(<EventType>MAPPING) is int {
-        //     Indent removedIndent;
-        //     EventType[] returnCollection = [];
-        //     while self.indent > startIndex {
-        //         removedIndent = self.indents.pop();
-        //         self.indent = removedIndent.index;
-        //         returnCollection.push(removedIndent.collection);
-        //     }
-
-        //     if self.indent == startIndex {
-        //         removedIndent = self.indents.pop();
-        //         returnCollection.push(removedIndent.collection);
-        //         if returnCollection.length() > 1 {
-        //             _ = returnCollection.pop();
-        //             return {
-        //                 change: -1,
-        //                 collection: returnCollection
-        //             };
-        //         }
-        //     }
-        // } else {
-        //     return self.generateError("Block mapping cannot have the same indent as a block sequence");
-        // }
-
-        // if existingIndentType.indexOf(<EventType>SEQUENCE) is int {
-        //     return {
-        //         change: 0,
-        //         collection: []
-        //     };
-        // } else {
-        //     self.indents.push({index: startIndex, collection: SEQUENCE});
-        //     return {
-        //         change: 1,
-        //         collection: [SEQUENCE]
-        //     };
-        // }
 
         EventType collection = mapIndex == () ? SEQUENCE : MAPPING;
 
@@ -1094,9 +1061,6 @@ class Lexer {
         };
     }
 
-    // startIndent = startIndex;
-    // token = self.generateToken(outputToken);
-    // return startIndex == () ? self.generateError("Invalid indentation") : token;
     private function scanMappingValueKey(YAMLToken outputToken, function () returns boolean|LexicalError process) returns Token|LexicalError {
         LexicalError? err = self.assertIndent(1);
 
