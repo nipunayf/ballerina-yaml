@@ -24,6 +24,9 @@ function collectionDataGen() returns map<[string|string[], Event[]]> {
         "block sequence with starting anchor": [["- &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, anchor: "anchor"}]],
         "block sequence with starting tag": [["- !tag", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag"}]],
         "block sequence with complete node properties": [["- !tag &anchor", " -"], [{startType: SEQUENCE}, {startType: SEQUENCE, tagHandle: "!", tag: "tag", anchor: "anchor"}]],
+        "mapping scalars to sequences with same indent": [["key1: ", "- first", "- second", "key2:", "- third"], [{startType: MAPPING}, {value: "key1"}, {startType: SEQUENCE}, {value: "first"},  {value: "second", entry: true}, {endType: SEQUENCE}, {value: "key2"}, {startType: SEQUENCE}, {value: "third"}]],
+        "mapping scalars to nested sequences with same indent": [["key1: ", "- first", "  - second", "key2: third"], [{startType: MAPPING}, {value: "key1"}, {startType: SEQUENCE}, {value: "first"},  {startType: SEQUENCE}, {value: "second"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {value: "key2"}, {value: "third"}]],
+        "mapping scalars to nested mappings with sam indent": [["key1: ", "  key2: ", "  - sequence", "key3: mapping"], [{startType: MAPPING}, {value: "key1"}, {startType: MAPPING}, {value: "key2"}, {startType: SEQUENCE}, {value: "sequence"} , {endType: SEQUENCE}, {endType: MAPPING}, {value: "key3"}, {value: "mapping"}]],
         "escaping multiple mappings": [["first: ", "  second: ", "    third: ", "forth: value"], [{startType: MAPPING}, {value: "first"}, {startType: MAPPING}, {value: "second"}, {startType: MAPPING}, {value: "third"}, {endType: MAPPING}, {endType: MAPPING}, {value: "forth"}]]
     };
 }

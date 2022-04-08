@@ -955,23 +955,78 @@ class Lexer {
     public function checkIndent(int? mapIndex = ()) returns Indentation|LexicalError {
         int startIndex = mapIndex == () ? self.index - 1 : mapIndex;
 
-        // Check if the current indent exists with a different type
-        EventType[] existingIndentType = from Indent indent in self.indents
-            where indent.index == startIndex
-            limit 1
-            select indent.collection;
+        // if existingIndentType.indexOf(<EventType>MAPPING) is int {
+        //     Indent removedIndent;
+        //     EventType[] returnCollection = [];
+        //     while self.indent > startIndex {
+        //         removedIndent = self.indents.pop();
+        //         self.indent = removedIndent.index;
+        //         returnCollection.push(removedIndent.collection);
+        //     }
 
-        if mapIndex is int && existingIndentType.indexOf(<EventType>SEQUENCE) is int {
-            return self.generateError("Block mapping cannot have the same indent as a block sequence");
-        }
+        //     if self.indent == startIndex {
+        //         removedIndent = self.indents.pop();
+        //         returnCollection.push(removedIndent.collection);
+        //         if returnCollection.length() > 1 {
+        //             _ = returnCollection.pop();
+        //             return {
+        //                 change: -1,
+        //                 collection: returnCollection
+        //             };
+        //         }
+        //     }
+        // } else {
+        //     return self.generateError("Block mapping cannot have the same indent as a block sequence");
+        // }
 
-        if mapIndex is () && existingIndentType.indexOf(<EventType>MAPPING) is int {
-            return self.generateError("Block sequence cannot have the same indent as a block mapping");
-        }
+        // if existingIndentType.indexOf(<EventType>SEQUENCE) is int {
+        //     return {
+        //         change: 0,
+        //         collection: []
+        //     };
+        // } else {
+        //     self.indents.push({index: startIndex, collection: SEQUENCE});
+        //     return {
+        //         change: 1,
+        //         collection: [SEQUENCE]
+        //     };
+        // }
 
         EventType collection = mapIndex == () ? SEQUENCE : MAPPING;
 
         if self.indent == startIndex {
+            EventType[] existingIndentType = from Indent indent in self.indents
+                where indent.index == startIndex
+                select indent.collection;
+
+            // The current token is a mapping key and a sequence entry exists for the indent
+            if mapIndex is int && existingIndentType.indexOf(<EventType>SEQUENCE) is int {
+                if existingIndentType.indexOf(<EventType>MAPPING) is int {
+                    return {
+                        change: -1,
+                        collection: [self.indents.pop().collection]
+                    };
+                } else {
+                    return self.generateError("Block mapping cannot have the same indent as a block sequence");
+                }
+            }
+
+            // The current token is a sequence entry and a mapping key exists for the indent
+            if mapIndex is () && existingIndentType.indexOf(<EventType>MAPPING) is int {
+                if existingIndentType.indexOf(<EventType>SEQUENCE) is int {
+                    return {
+                        change: 0,
+                        collection: []
+                    };
+                } else {
+                    self.indents.push({index: startIndex, collection: SEQUENCE});
+                    return {
+                        change: 1,
+                        collection: [SEQUENCE]
+                    };
+                }
+            }
+
             return {
                 change: 0,
                 collection: []
@@ -987,12 +1042,22 @@ class Lexer {
             };
         }
 
-        Indent removedIndent;
+        Indent? removedIndent = ();
         EventType[] returnCollection = [];
         while self.indent > startIndex {
             removedIndent = self.indents.pop();
-            self.indent = removedIndent.index;
-            returnCollection.push(removedIndent.collection);
+            self.indent = (<Indent>removedIndent).index;
+            returnCollection.push((<Indent>removedIndent).collection);
+        }
+
+        if self.indents.length() > 0 && removedIndent is Indent {
+            Indent removedSecondIndent = self.indents.pop();
+            if removedSecondIndent.index == startIndex {
+                returnCollection.push(removedIndent.collection);
+                removedIndent = removedSecondIndent;
+            } else {
+                self.indents.push(removedSecondIndent);
+            }
         }
 
         if self.indent == startIndex {
@@ -1008,62 +1073,12 @@ class Lexer {
 
         return self.generateError("Invalid indentation");
     }
-    // public function checkIndent(int? mapIndex = ()) returns LexicalError? {
-    //     int startIndex = mapIndex == () ? self.index : mapIndex;
-    //     if mapIndex is int && self.seqIndents.indexOf(startIndex) is int {
-    //         return self.generateError("Block mapping cannot have the same indent as a block sequence");
-    //     }
-
-    //     int[] indents = mapIndex == () ? self.seqIndents : self.mapIndents;
-
-    //     if self.indent == startIndex {
-    //         return;
-    //     }
-
-    //     if self.indent < startIndex {
-    //         indents.push(startIndex);
-    //         if mapIndex == () {
-    //             self.lexeme = "+";
-    //         }
-    //         self.indent = startIndex;
-    //         return;
-    //     }
-
-    //     int decrease = 0;
-    //     while self.indent > startIndex {
-    //         self.indent = indents.pop();
-    //         decrease += 1;
-    //     }
-
-    //     if self.indent == startIndex {
-    //         indents.push(self.indent);
-    //         if mapIndex == () && decrease > 1 {
-    //             self.lexeme = "-" + (decrease - 1).toString();
-    //         }
-    //         return;
-    //     }
-
-    //     return self.generateError("Invalid indentation");
-    // }
 
     private function assertIndent(int offset = 0) returns LexicalError? {
         if self.index < self.indent + offset {
             return self.generateError("Invalid indentation");
         }
     }
-
-    // function getSequenceIndentChange() returns int {
-    //     if self.seqIndents.length() == 0 {
-    //         return 0;
-    //     }
-    //     int decrease = 0;
-    //     int seqIndent = self.seqIndents[self.seqIndents.length() - 1];
-    //     while self.indent < seqIndent && self.seqIndents.length() > 0 {
-    //         seqIndent = self.seqIndents.pop();
-    //         decrease += 1;
-    //     }
-    //     return decrease;
-    // }
 
     # Check for the lexemes to crete an DECIMAL token.
     #
