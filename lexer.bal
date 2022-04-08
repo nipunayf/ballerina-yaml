@@ -1052,7 +1052,7 @@ class Lexer {
 
         if self.indents.length() > 0 && removedIndent is Indent {
             Indent removedSecondIndent = self.indents.pop();
-            if removedSecondIndent.index == startIndex {
+            if removedSecondIndent.index == startIndex && collection == MAPPING {
                 returnCollection.push(removedIndent.collection);
                 removedIndent = removedSecondIndent;
             } else {
