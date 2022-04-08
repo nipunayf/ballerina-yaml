@@ -92,6 +92,8 @@ class Lexer {
     # When flag is set, updates the current indent to the indent of the first line
     boolean captureIndent = false;
 
+    boolean enforceMapping = false;
+
     private map<string> escapedCharMap = {
         "0": "\u{00}",
         "a": "\u{07}",
@@ -197,12 +199,9 @@ class Lexer {
 
         // Terminating delimiter
         if self.peek() == "\"" {
-            Token token = self.generateToken(DOUBLE_QUOTE_DELIMITER);
-            if self.peek(1) == ":" {
-
-            }
-            return token;
+            return self.scanMappingValueKeyWithDelimiter(DOUBLE_QUOTE_DELIMITER);
         }
+
         // Regular double quoted characters
         if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
@@ -579,7 +578,7 @@ class Lexer {
 
         // Check if the line has sufficient indent to be process as a block scalar.
         boolean hasSufficientIndent = true;
-        foreach int i in 0 ... self.indent + self.addIndent {
+        foreach int i in 0 ... (self.indent < 0 ? 0 : self.indent) + self.addIndent - 1 {
             if !(self.peek() == " ") {
                 hasSufficientIndent = false;
                 break;
@@ -589,14 +588,26 @@ class Lexer {
 
         // There is no sufficient indent to consider printable characters
         if !hasSufficientIndent {
-            // Generate beginning of the trailing comment
-            return self.peek() == "#" ? self.generateToken(TRAILING_COMMENT)
-                // Other characters are not allowed when the indentation is less
-                : self.generateError("Insufficient indent to process literal characters");
-        }
+            if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
+                self.enforceMapping = true;
+                return self.stateStart();
+            }
 
-        if self.assertIndent(self.addIndent) is LexicalError {
-
+            match self.peek() {
+                "#" => { // Generate beginning of the trailing comment
+                    return self.generateToken(TRAILING_COMMENT);
+                }
+                "'"|"\"" => { // Possible flow scalar
+                    self.enforceMapping = true;
+                    return self.stateStart();
+                }
+                "-" => { // Possible sequence entry
+                    return self.stateStart();
+                }
+                _ => { // Other characters are not allowed when the indentation is less
+                    return self.generateError("Insufficient indent to process literal characters");
+                }
+            }
         }
 
         // Generate an empty lines that have less index.
@@ -613,7 +624,7 @@ class Lexer {
                 self.forward();
             }
 
-            self.indent += additionalIndent;
+            self.addIndent += additionalIndent;
             self.captureIndent = false;
         }
 
@@ -1063,6 +1074,8 @@ class Lexer {
 
     private function scanMappingValueKey(YAMLToken outputToken, function () returns boolean|LexicalError process) returns Token|LexicalError {
         LexicalError? err = self.assertIndent(1);
+        boolean enforceMapping = self.enforceMapping;
+        self.enforceMapping = false;
 
         int startIndent = self.index;
         Token token = check self.iterate(process, outputToken);
@@ -1090,11 +1103,13 @@ class Lexer {
             return token;
         }
         self.forward(-numWhitespace);
-        return token;
+        return enforceMapping ? self.generateError("Invalid Indentation") : token;
     }
 
     private function scanMappingValueKeyWithDelimiter(YAMLToken outputToken) returns Token|LexicalError {
         Token token = self.generateToken(outputToken);
+        boolean enforceMapping = self.enforceMapping;
+        self.enforceMapping = false;
 
         // Ignore whitespace until a character is found
         int numWhitespace = 0;
@@ -1121,7 +1136,7 @@ class Lexer {
             return token;
         }
         self.forward(-numWhitespace);
-        return token;
+        return enforceMapping ? self.generateError("Invalid Indentation") : token;
     }
 
     # Encapsulate a function to run isolated on the remaining characters.

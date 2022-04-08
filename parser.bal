@@ -452,22 +452,22 @@ class Parser {
         boolean isFirstLine = true;
         boolean prevTokenIndented = false;
 
-        check self.checkToken();
+        check self.checkToken(peek = true);
 
         while true {
-            match self.currentToken.token {
+            match self.tokenBuffer.token {
                 PRINTABLE_CHAR => {
                     if !isFirstLine {
                         string suffixChar = "\n";
-                        if isFolded && prevTokenIndented && self.currentToken.value[0] != " " {
+                        if isFolded && prevTokenIndented && self.tokenBuffer.value[0] != " " {
                             suffixChar = newLineBuffer.length() == 0 ? " " : "";
                         }
                         lexemeBuffer += newLineBuffer + suffixChar;
                         newLineBuffer = "";
                     }
 
-                    lexemeBuffer += self.currentToken.value;
-                    prevTokenIndented = self.currentToken.value[0] != " ";
+                    lexemeBuffer += self.tokenBuffer.value;
+                    prevTokenIndented = self.tokenBuffer.value[0] != " ";
                     isFirstLine = false;
                 }
                 EOL => {
@@ -495,15 +495,17 @@ class Parser {
                     }
                     check self.initLexer();
                     check self.checkToken();
+                    check self.checkToken(peek = true);
 
                     // Ignore the tokens inside trailing comments
-                    while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+                    while self.tokenBuffer.token == EOL || self.tokenBuffer.token == EMPTY_LINE {
                         // Terminate at the end of the line
                         if self.lineIndex == self.numLines - 1 {
                             break;
                         }
                         check self.initLexer();
                         check self.checkToken();
+                        check self.checkToken(peek = true);
                     }
 
                     self.lexer.trailingComment = false;
@@ -514,6 +516,7 @@ class Parser {
                 }
             }
             check self.checkToken();
+            check self.checkToken(peek = true);
         }
 
         // Adjust the tail based on the chomping values
