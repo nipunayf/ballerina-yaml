@@ -59,7 +59,8 @@ function testBlockScalarsInCollection(string[] lines, Event[] eventTree) returns
 function blockScalarInCollection() returns map<[string[], Event[]]> {
     return {
         "folded scalar as mapping value": [["key1: >-", " first", " second", "key2: third"], [{startType: MAPPING}, {value: "key1"}, {value: "first second"}, {value: "key2"}, {value: "third"}]],
-        "folded scalar as sequence entry": [["- >-", " first", " second", "- third"], [{startType: SEQUENCE}, {value: "first second"}, {value: "third", entry: true}]]
+        "folded scalar as sequence entry": [["- >-", " first", " second", "- third"], [{startType: SEQUENCE}, {value: "first second"}, {value: "third", entry: true}]],
+        "folded scalar after trailing comment": [["- >-", " first", "# trailing comment", "- third"], [{startType: SEQUENCE}, {value: "first"}, {value: "third", entry: true}]]
     };
 }
 

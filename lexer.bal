@@ -550,31 +550,6 @@ class Lexer {
     }
 
     private function stateLiteral() returns Token|LexicalError {
-        // Check for comments in trailing comments
-        if self.trailingComment {
-            match self.peek() {
-                " " => {
-                    _ = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                    match self.peek() {
-                        "#" => { // New line comments are allowed in trailing comments
-                            return self.generateToken(EOL);
-                        }
-                        () => { // Empty lines are allowed in trailing comments
-                            return self.generateToken(EMPTY_LINE);
-                        }
-                        _ => { // Any other characters are not allowed
-                            return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
-                        }
-                    }
-                }
-                "#" => { // New line comments are allowed in trailing comments
-                    return self.generateToken(EOL);
-                }
-                _ => { // Any other characters are not allowed
-                    return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
-                }
-            }
-        }
 
         // Check if the line has sufficient indent to be process as a block scalar.
         boolean hasSufficientIndent = true;
@@ -595,7 +570,7 @@ class Lexer {
 
             match self.peek() {
                 "#" => { // Generate beginning of the trailing comment
-                    return self.generateToken(TRAILING_COMMENT);
+                    return self.trailingComment ? self.generateToken(EOL) : self.generateToken(TRAILING_COMMENT);
                 }
                 "'"|"\"" => { // Possible flow scalar
                     self.enforceMapping = true;
@@ -604,8 +579,30 @@ class Lexer {
                 "-" => { // Possible sequence entry
                     return self.stateStart();
                 }
+                () => { // Empty lines are allowed in trailing comments
+                    return self.generateToken(EMPTY_LINE);
+                }
                 _ => { // Other characters are not allowed when the indentation is less
                     return self.generateError("Insufficient indent to process literal characters");
+                }
+            }
+        }
+
+        if self.trailingComment {
+            while true {
+                match self.peek() {
+                    " " => { // Ignore whitespace
+                        self.forward();
+                    }
+                    "#" => { // Generate beginning of the trailing comment
+                        return self.generateToken(EOL);
+                    }
+                    () => { // Empty lines are allowed in trailing comments
+                        return self.generateToken(EMPTY_LINE);
+                    }
+                    _ => {
+                        return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
+                    }
                 }
             }
         }
