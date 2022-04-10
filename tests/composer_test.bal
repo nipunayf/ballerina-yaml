@@ -39,6 +39,7 @@ function invalidEventStreamDataGen() returns map<[string[]]> {
     return {
         // "multiple root data values": [["|-", " 123", "", ">-", " 123"]],
         "flow style sequence without end": [["[", " first, ", "second "]],
-        "aliasing anchor does note exist": [["*alias"]]
+        "aliasing anchor does note exist": [["*alias"]],
+        "cyclic reference": [["- &anchor [*anchor]"]]
     };
 }
