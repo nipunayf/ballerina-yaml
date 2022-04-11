@@ -49,12 +49,7 @@ class Composer {
             }
 
             sequence.push(check self.composeNode(event));
-            if self.buffer == () {
-                event = check self.parser.parse();
-            } else {
-                event = <Event>self.buffer;
-                self.buffer = ();
-            }
+            event = check self.parser.parse();
         }
 
         return sequence;
@@ -98,17 +93,7 @@ class Composer {
             anydata value = check self.composeNode(event);
 
             structure[key.toString()] = value;
-            if self.buffer == () {
-                event = check self.parser.parse();
-            } else {
-                event = <Event>self.buffer;
-                self.buffer = ();
-            }
-
-            if event is StartEvent|ScalarEvent && event.entry {
-                self.buffer = event;
-                break;
-            }
+            event = check self.parser.parse();
         }
 
         return structure;

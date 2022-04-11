@@ -23,7 +23,6 @@ class Parser {
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
-    private boolean sequenceEntry = false;
 
     map<string> tagHandles = {};
 
@@ -175,7 +174,6 @@ class Parser {
                         return {startType: SEQUENCE};
                     }
                     0 => { // Sequence entry
-                        self.sequenceEntry = true;
                         return self.parse();
                     }
                     -1 => { //Indent decrease 
@@ -653,13 +651,7 @@ class Parser {
             }
         }
 
-        boolean entry = false;
-        if self.sequenceEntry {
-            entry = true;
-            self.sequenceEntry = false;
-        }
-
-        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, entry} : {value: value, entry});
+        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value} : {value});
 
         if buffer == () {
             return event;

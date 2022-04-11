@@ -8,7 +8,6 @@ type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
     string? tagHandle  = ();
-    boolean entry = false;
 |};
 
 type ScalarEvent record {|
