@@ -105,3 +105,17 @@ function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
         "both empty nodes in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
     };
 }
+
+@test:Config {
+    dataProvider: invalidKeyDataGen
+}
+function testInvalidBlockKeys(string|string[] lines) returns error? {
+    check assertParsingError(lines);
+}
+
+function invalidKeyDataGen() returns map<[string|string[]]> {
+    return {
+        "explicit key and mapping value without indent": [["? first", "second", " : value"]],
+        "multiline implicit key": [["first", "second", " : value"]]
+    };
+}

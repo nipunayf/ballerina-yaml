@@ -23,6 +23,7 @@ class Parser {
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
+    private boolean explicitKey = false;
 
     map<string> tagHandles = {};
 
@@ -162,6 +163,7 @@ class Parser {
                 }
             }
             MAPPING_KEY => { // Explicit key
+                self.explicitKey = true;
                 check self.separate();
                 return self.appendData(explicit = true);
             }
@@ -323,6 +325,7 @@ class Parser {
             check self.checkToken();
         }
 
+        check self.verifyKey(isFirstLine);
         return lexemeBuffer;
     }
 
@@ -375,19 +378,27 @@ class Parser {
             check self.checkToken();
         }
 
+        check self.verifyKey(isFirstLine);
+        return lexemeBuffer;
+    }
+
+    private function verifyKey(boolean isFirstLine) returns LexicalError|ParsingError|() {
+        if self.explicitKey {
+            self.explicitKey = false;
+            return;
+        }
         self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
         if self.tokenBuffer.token == MAPPING_VALUE && !isFirstLine {
             return self.generateError("Single-quoted keys cannot span multiple lines");
         }
-
-        return lexemeBuffer;
     }
 
     private function planarScalar() returns ParsingError|LexicalError|string {
         // Process the first planar char
         string lexemeBuffer = self.currentToken.value;
         boolean emptyLine = false;
+        boolean isFirstLine = true;
 
         check self.checkToken(peek = true);
 
@@ -408,6 +419,8 @@ class Parser {
                 }
                 EOL => {
                     check self.checkToken();
+                    isFirstLine = false;
+
                     // Terminate at the end of the line
                     if self.lineIndex == self.numLines - 1 {
                         break;
@@ -438,6 +451,8 @@ class Parser {
             }
             check self.checkToken(peek = true);
         }
+
+        check self.verifyKey(isFirstLine);
         return self.trimTailWhitespace(lexemeBuffer);
     }
 
