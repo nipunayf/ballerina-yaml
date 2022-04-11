@@ -780,10 +780,13 @@ class Lexer {
             return true;
         }
 
+        // Terminate when the flow indicators are detected inside flow style collections
+        if self.matchRegexPattern([FLOW_INDICATOR_PATTERN]) && self.numOpenedFlowCollections > 0 {
+            return true;
+        }
+
         // Process ns-plain-safe character
-        if self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
-        [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN, "#", ":"]
-        : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
             self.lexeme += whitespace + <string>self.peek();
             return false;
         }
@@ -800,9 +803,7 @@ class Lexer {
 
         // Check for mapping value with a space after it 
         if self.peek() == ":" {
-            if !self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
-                [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN]
-                : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+            if !self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                 self.forward(-numWhitespace);
                 return true;
             }

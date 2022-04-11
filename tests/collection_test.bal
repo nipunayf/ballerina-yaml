@@ -102,7 +102,7 @@ function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
         "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
         "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
         "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
-        "both empty nodes in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
+        "only explicit key in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
     };
 }
 
