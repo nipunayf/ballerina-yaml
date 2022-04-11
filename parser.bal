@@ -769,6 +769,15 @@ class Parser {
     private function isNodeKey() returns boolean|LexicalError|ParsingError {
         boolean isJsonKey = self.lexer.isJsonKey;
 
+        // Ignore the whitespace and lines if there is any
+        check self.separate(true);
+        check self.checkToken(peek = true);
+
+        // Check if the next token is a mapping value or separator
+        if self.tokenBuffer.token == MAPPING_VALUE || self.tokenBuffer.token == SEPARATOR {
+            check self.checkToken();
+        }
+
         // If there are no whitespace, and the current token is ':'
         if self.currentToken.token == MAPPING_VALUE {
             self.lexer.isJsonKey = false;
@@ -780,26 +789,6 @@ class Parser {
 
         // If there ano no whitespace, and the current token is ","
         if self.currentToken.token == SEPARATOR {
-            check self.separate(true);
-            self.lexer.context = FLOW_KEY;
-            return true;
-        }
-
-        // There are whitespace, and consider next tokens for either ":" or ","
-        check self.separate(true);
-        check self.checkToken(peek = true);
-
-        if self.tokenBuffer.token == MAPPING_VALUE {
-            check self.checkToken();
-            self.lexer.isJsonKey = false;
-            self.lexer.context = FLOW_IN;
-            check self.separate(isJsonKey, true);
-            self.expectEmptyNode = true;
-            return true;
-        }
-
-        if self.tokenBuffer.token == SEPARATOR {
-            check self.checkToken();
             check self.separate(true);
             self.lexer.context = FLOW_KEY;
             return true;
