@@ -15,11 +15,8 @@ class Parser {
     # Used later when the checkToken method is invoked.
     private Token tokenBuffer = {token: DUMMY};
 
-    # Hold the lexemes until the final value is generated
-    private string lexemeBuffer = "";
-
     # Lexical analyzer tool for getting the tokens
-    Lexer lexer = new Lexer();
+    Lexer lexer = new ();
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
@@ -246,15 +243,16 @@ class Parser {
         self.lexer.state = LEXER_DIRECTIVE;
 
         // Expect yaml version
-        check self.checkToken(DECIMAL, true);
+        check self.checkToken(DECIMAL);
+        string lexemeBuffer = self.currentToken.value;
         check self.checkToken(DOT);
-        self.lexemeBuffer += ".";
-        check self.checkToken(DECIMAL, true);
+        lexemeBuffer += ".";
+        check self.checkToken(DECIMAL);
+        lexemeBuffer += self.currentToken.value;
 
         // Update the version
         if (self.yamlVersion is null) {
-            self.yamlVersion = self.lexemeBuffer;
-            self.lexemeBuffer = "";
+            self.yamlVersion = lexemeBuffer;
             return;
         }
 
@@ -868,11 +866,10 @@ class Parser {
     # Hence, the error checking must be done explicitly.
     #
     # + expectedTokens - Predicted token or tokens  
-    # + addToLexeme - If set, add the value of the token to lexemeBuffer.  
     # + customMessage - Error message to be displayed if the expected token not found  
     # + peek - Stores the token in the buffer
     # + return - Parsing error if not found
-    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
+    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
         Token token;
 
         // Obtain a token form the lexer if there is none in the buffer.
@@ -910,10 +907,6 @@ class Parser {
             if (expectedTokens.indexOf(token.token) == ()) {
                 return self.generateError(errorMessage);
             }
-        }
-
-        if (addToLexeme) {
-            self.lexemeBuffer += self.currentToken.value;
         }
     }
 
