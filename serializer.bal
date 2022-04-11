@@ -31,7 +31,7 @@ class Serializer {
 
             string[] keys = data.keys();
             foreach string key in keys {
-                events.push({value: key, isKey: true});
+                events.push({value: key});
                 events = self.combineArray(events, check self.serialize(data[key], depthLevel + 1));
             }
 

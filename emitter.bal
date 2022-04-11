@@ -150,19 +150,12 @@ function writeFlowMapping(EmitterState state) returns string|EmittingError {
         }
 
         if event is ScalarEvent {
-            if event.isKey {
-                line += event.value.toString() + ": ";
-            } else {
-                return generateError("Expected a key before a value in mapping");
-            }
+            line += event.value.toString() + ": ";
         }
 
         event = getEvent(state);
 
         if event is ScalarEvent {
-            if event.isKey {
-                return generateError("Expected a value after key");
-            }
             line += event.value.toString();
         }
 
@@ -202,19 +195,12 @@ function writeBlockMapping(EmitterState state, string whitespace) returns Emitti
         }
 
         if event is ScalarEvent {
-            if event.isKey {
-                line += whitespace + event.value.toString() + ": ";
-            } else {
-                return generateError("Expected a key before a value in mapping");
-            }
+            line += whitespace + event.value.toString() + ": ";
         }
 
         event = getEvent(state);
 
         if event is ScalarEvent {
-            if event.isKey {
-                return generateError("Expected a value after key");
-            }
             line += event.value.toString();
             state.output.push(line);
         }
