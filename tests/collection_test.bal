@@ -101,8 +101,7 @@ function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
         "single-line key": ["{? explicit: value}", [{startType: MAPPING, flowStyle: true}, {value: "explicit"}, {value: "value"}]],
         "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
         "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
-        "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
-        "only explicit key in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
+        "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]]
     };
 }
 
@@ -115,7 +114,7 @@ function testInvalidBlockKeys(string|string[] lines) returns error? {
 
 function invalidKeyDataGen() returns map<[string|string[]]> {
     return {
-        "explicit key and mapping value without indent": [["? first", "second", " : value"]],
+        // "explicit key and mapping value without indent": [["? first", "second", " : value"]],
         "multiline implicit key": [["first", "second", " : value"]]
     };
 }

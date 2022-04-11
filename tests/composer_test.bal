@@ -27,7 +27,8 @@ function nativeDataStructureDataGen() returns map<[string|string[], anydata]> {
     // "explicit key and mapping value in block mapping": [["?", ":"], {"" : ()}],
     // "explicit key in block mapping": [["? key"], {"key": ()}],
     // "explicit key with mapping value in block mapping": [["? key", ":"], {"key": ()}],
-    // "explicit key empty key": [["? ", ": value"], {"": "value"}]
+    // "explicit key empty key": [["? ", ": value"], {"": "value"}],
+    // "only explicit key in flow mapping": ["{? }", {"" : ()}]
     };
 }
 

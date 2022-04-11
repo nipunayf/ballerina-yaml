@@ -29,16 +29,6 @@ enum State {
     LEXER_LITERAL
 }
 
-# Represents the different contexts of the Lexer introduced in the YAML specification.
-enum Context {
-    BLOCK_IN,
-    BLOCK_OUT,
-    BLOCK_KEY,
-    FLOW_IN,
-    FLOW_OUT,
-    FLOW_KEY
-}
-
 type Indent record {|
     int index;
     EventType collection;
@@ -78,9 +68,6 @@ class Lexer {
 
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
-
-    # Represents the current context of the parser
-    Context context = BLOCK_OUT;
 
     # Flag is enabled after a JSON key is detected.
     # Used to generate mapping value even when it is possible to generate a planar scalar.

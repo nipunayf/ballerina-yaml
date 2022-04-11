@@ -693,7 +693,7 @@ class Parser {
                 return MAPPING;
             }
             LITERAL|FOLDED => {
-                if self.lexer.context == FLOW_ENTRY || self.lexer.context == FLOW_IN || self.lexer.context == FLOW_OUT {
+                if self.lexer.numOpenedFlowCollections > 0 {
                     return self.generateError("Cannot have a block node inside a flow node");
                 }
 
@@ -706,18 +706,6 @@ class Parser {
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
         self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
-
-        // Only separation-in-line is considered for keys
-        if self.lexer.context == BLOCK_KEY || self.lexer.context == FLOW_KEY {
-            // If separate is optional, skip the check when no separate-in-line is detected
-            if optional && self.tokenBuffer.token != SEPARATION_IN_LINE {
-                return;
-            }
-
-            check self.checkToken();
-            return self.currentToken.token == SEPARATION_IN_LINE ? ()
-                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, self.prevToken));
-        }
 
         // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
         if optional && !(self.tokenBuffer.token == EOL || self.tokenBuffer.token == SEPARATION_IN_LINE) {
@@ -781,7 +769,6 @@ class Parser {
         // If there are no whitespace, and the current token is ':'
         if self.currentToken.token == MAPPING_VALUE {
             self.lexer.isJsonKey = false;
-            self.lexer.context = FLOW_IN;
             check self.separate(isJsonKey, true);
             self.expectEmptyNode = true;
             return true;
@@ -790,7 +777,6 @@ class Parser {
         // If there ano no whitespace, and the current token is ","
         if self.currentToken.token == SEPARATOR {
             check self.separate(true);
-            self.lexer.context = FLOW_KEY;
             return true;
         }
 
