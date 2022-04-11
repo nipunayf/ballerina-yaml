@@ -375,7 +375,9 @@ class Lexer {
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
                 Token token = self.generateToken(MAPPING_VALUE);
-                if self.index == 0 || self.line.trim()[0] == ":" {
+
+                // Capture the for empty key mapping values
+                if (self.index == 0 || self.line.trim()[0] == ":") && self.numOpenedFlowCollections == 0 {
                     token.indentation = check self.checkIndent(self.index);
                 }
                 return token;
@@ -574,6 +576,9 @@ class Lexer {
                 }
                 "'"|"\"" => { // Possible flow scalar
                     self.enforceMapping = true;
+                    return self.stateStart();
+                }
+                ":" => {
                     return self.stateStart();
                 }
                 "-" => { // Possible sequence entry
@@ -1089,13 +1094,13 @@ class Lexer {
         }
 
         if err is LexicalError { // Not sufficient indent to process as a value token
-            if self.peek() == ":" { // The token is a mapping key
+            if self.peek() == ":" && self.numOpenedFlowCollections == 0 { // The token is a mapping key
                 token.indentation = check self.checkIndent(startIndent);
                 return token;
             }
             return self.generateError("Invalid indentation");
         }
-        if self.peek() == ":" {
+        if self.peek() == ":" && self.numOpenedFlowCollections == 0 {
             token.indentation = check self.checkIndent(startIndent);
             return token;
         }
@@ -1120,14 +1125,14 @@ class Lexer {
         }
 
         if self.index < self.delimiterStartIndex { // Not sufficient indent to process as a value token
-            if self.peek() == ":" { // The token is a mapping key
+            if self.peek() == ":" && self.numOpenedFlowCollections == 0 { // The token is a mapping key
                 token.indentation = check self.checkIndent(self.delimiterStartIndex);
                 self.delimiterStartIndex = -1;
                 return token;
             }
             return self.generateError("Invalid indentation");
         }
-        if self.peek() == ":" {
+        if self.peek() == ":" && self.numOpenedFlowCollections == 0 {
             token.indentation = check self.checkIndent(self.delimiterStartIndex);
             self.delimiterStartIndex = -1;
             return token;

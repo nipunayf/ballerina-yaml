@@ -163,7 +163,7 @@ class Parser {
             }
             MAPPING_KEY => { // Explicit key
                 check self.separate();
-                return self.appendData();
+                return self.appendData(explicit = true);
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
@@ -609,24 +609,17 @@ class Parser {
         return [tagHandle, tag, anchor];
     }
 
-    private function appendData(map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
+    private function appendData(map<anydata> tagStructure = {}, boolean peeked = false, boolean explicit = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
         Event? buffer = ();
 
         Indentation? indentation = self.currentToken.indentation;
-        // if self.currentToken.indentation {
-        //     int decrease = self.lexer.getSequenceIndentChange();
-        //     if decrease > 1 {
-        //         foreach int i in 2 ... decrease {
-        //             self.eventBuffer.push({endType: SEQUENCE});
-        //         }
-        //         buffer = {endType: SEQUENCE};
-        //     }
-        //     if decrease == 1 {
-        //         buffer = {endType: SEQUENCE};
-        //     }
-        // }
+
+        // If the key is explicit, then the indentation is stored in the mapping value.
+        if indentation == () && explicit {
+            indentation = self.tokenBuffer.indentation;
+        }
 
         // Check if the current node is a key
         _ = check self.isNodeKey();

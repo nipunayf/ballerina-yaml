@@ -83,3 +83,25 @@ function testIndentationOfBlockMapping() returns error? {
         test:assertEquals(lexer.indents.length(), indentMapping[i][1]);
     }
 }
+
+@test:Config {
+    dataProvider: explicitKeysDataGen
+}
+function testExplicitKey(string|string[] line, Event[] eventTree) returns error? {
+    Parser parser = check new Parser((line is string) ? [line] : line);
+
+    foreach Event item in eventTree {
+        Event event = check parser.parse();
+        test:assertEquals(event, item);
+    }
+}
+
+function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
+    return {
+        "single-line key": ["{? explicit: value}", [{startType: MAPPING, flowStyle: true}, {value: "explicit"}, {value: "value"}]],
+        "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
+        "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
+        "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
+        "both empty nodes in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
+    };
+}
