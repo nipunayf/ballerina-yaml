@@ -26,6 +26,7 @@ class Parser {
 
     # Flag is set if an empty node is possible to expect
     private boolean explicitKey = false;
+    private boolean directiveDocument = false;
 
     map<string> tagHandles = {};
 
@@ -58,6 +59,11 @@ class Parser {
             check self.checkToken();
         }
 
+        // Only directive tokens are allowed in directive document
+        if self.directiveDocument && self.currentToken.token != DIRECTIVE {
+            return self.generateError(string `'${self.currentToken.token}' are not allowed in directive document`);
+        }
+
         match self.currentToken.token {
             EOL|EMPTY_LINE => {
                 if self.lineIndex >= self.numLines - 1 {
@@ -76,10 +82,12 @@ class Parser {
                     check self.tagDirective();
                     check self.checkToken([SEPARATION_IN_LINE, EOL]);
                 }
+                self.directiveDocument = true;
                 check self.initLexer();
                 return check self.parse();
             }
             DIRECTIVE_MARKER => {
+                self.directiveDocument = false;
                 return {
                     docVersion: self.yamlVersion == () ? "1.2.2" : <string>self.yamlVersion,
                     tags: self.tagHandles

@@ -167,7 +167,8 @@ function endEventDataGen() returns map<[string, EventType]> {
     return {
         "end-sequence": ["]", SEQUENCE],
         "end-mapping": ["}", MAPPING],
-        "end-document": ["...", DOCUMENT]
+        "end-document": ["...", DOCUMENT],
+        "end-stream": ["", STREAM]
     };
 }
 

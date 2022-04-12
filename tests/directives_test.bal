@@ -119,3 +119,8 @@ function tagHandlesDataGen() returns map<[string, string, string]> {
         "named": ["%TAG !a! tag:named ", "!a!", "tag:named"]
     };
 }
+
+@test:Config {}
+function testInvalidContentInDirectiveDocument() returns error? {
+    check assertParsingError(["%TAG ! local", "anything that is not %"], eventNumber = 2);
+}
