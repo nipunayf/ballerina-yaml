@@ -37,8 +37,9 @@ class Parser {
 
     # Parse the initialized array of strings
     #
+    # + expectKey - To expect the next event to be a key
     # + return - Lexical or parsing error on failure
-    public function parse() returns Event|LexicalError|ParsingError {
+    public function parse(boolean expectKey = false) returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
             return self.eventBuffer.shift();
@@ -87,7 +88,7 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                return self.appendData(peeked = true);
+                return self.appendData(expectKey, peeked = true);
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -109,7 +110,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData({tag, tagHandle, anchor});
+                return self.appendData(expectKey, {tag, tagHandle, anchor});
             }
             TAG => {
                 // Obtain the tag name
@@ -121,7 +122,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData({tag, anchor});
+                return self.appendData(expectKey, {tag, anchor});
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -135,7 +136,7 @@ class Parser {
                 string? tag;
                 [tagHandle, tag] = check self.nodeTagHandle();
 
-                return self.appendData({tagHandle, tag, anchor});
+                return self.appendData(expectKey, {tagHandle, tag, anchor});
             }
             MAPPING_VALUE => { // Empty node as the key
                 Indentation? indentation = self.currentToken.indentation;
@@ -159,10 +160,13 @@ class Parser {
                     }
                 }
             }
+            SEPARATOR => { // Empty node as the value in flow mappings
+                return {value: ()};
+            }
             MAPPING_KEY => { // Explicit key
                 self.explicitKey = true;
                 check self.separate();
-                return self.appendData(explicit = true);
+                return self.appendData(expectKey);
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
@@ -382,7 +386,6 @@ class Parser {
 
     private function verifyKey(boolean isFirstLine) returns LexicalError|ParsingError|() {
         if self.explicitKey {
-            self.explicitKey = false;
             return;
         }
         self.lexer.state = LEXER_START;
@@ -622,7 +625,7 @@ class Parser {
         return [tagHandle, tag, anchor];
     }
 
-    private function appendData(map<anydata> tagStructure = {}, boolean peeked = false, boolean explicit = false) returns Event|LexicalError|ParsingError {
+    private function appendData(boolean expectKey, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
         Event? buffer = ();
@@ -630,12 +633,39 @@ class Parser {
         Indentation? indentation = self.currentToken.indentation;
 
         // If the key is explicit, then the indentation is stored in the mapping value.
-        if indentation == () && explicit {
+        if indentation == () && self.explicitKey {
             indentation = self.tokenBuffer.indentation;
         }
+        self.explicitKey = false;
 
         // Check if the current node is a key
-        _ = check self.isNodeKey();
+        boolean isJsonKey = self.lexer.isJsonKey;
+
+        // Ignore the whitespace and lines if there is any
+        check self.separate(true);
+        check self.checkToken(peek = true);
+
+        // Check if the next token is a mapping value or    
+        if self.tokenBuffer.token == MAPPING_VALUE || self.tokenBuffer.token == SEPARATOR {
+            check self.checkToken();
+        }
+
+        // If there are no whitespace, and the current token is ':'
+        if self.currentToken.token == MAPPING_VALUE {
+            self.lexer.isJsonKey = false;
+            check self.separate(isJsonKey, true);
+            if !expectKey {
+                buffer = {value: ()};
+            }
+        }
+
+        // If there ano no whitespace, and the current token is ","
+        if self.currentToken.token == SEPARATOR {
+            check self.separate(true);
+            if expectKey {
+                self.eventBuffer.push({value: ()});
+            }
+        }
 
         if indentation is Indentation {
             match indentation.change {
@@ -752,35 +782,6 @@ class Parser {
         }
 
         return self.generateError(check self.formatErrorMessage(1, [EOL, SEPARATION_IN_LINE], self.currentToken.token));
-    }
-
-    private function isNodeKey() returns boolean|LexicalError|ParsingError {
-        boolean isJsonKey = self.lexer.isJsonKey;
-
-        // Ignore the whitespace and lines if there is any
-        check self.separate(true);
-        check self.checkToken(peek = true);
-
-        // Check if the next token is a mapping value or separator
-        if self.tokenBuffer.token == MAPPING_VALUE || self.tokenBuffer.token == SEPARATOR {
-            check self.checkToken();
-        }
-
-        // If there are no whitespace, and the current token is ':'
-        if self.currentToken.token == MAPPING_VALUE {
-            self.lexer.isJsonKey = false;
-            check self.separate(isJsonKey, true);
-            self.expectEmptyNode = true;
-            return true;
-        }
-
-        // If there ano no whitespace, and the current token is ","
-        if self.currentToken.token == SEPARATOR {
-            check self.separate(true);
-            return true;
-        }
-
-        return false;
     }
 
     private function constructEvent(map<anydata> m1, map<anydata>? m2 = ()) returns Event|ParsingError {

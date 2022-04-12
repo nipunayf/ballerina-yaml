@@ -57,7 +57,7 @@ class Composer {
 
     private function composeMapping(boolean flowStyle) returns map<anydata>|LexicalError|ParsingError|ComposingError {
         map<anydata> structure = {};
-        Event event = check self.parser.parse();
+        Event event = check self.parser.parse(true);
 
         while true {
             if event is EndEvent {
@@ -93,7 +93,7 @@ class Composer {
             anydata value = check self.composeNode(event);
 
             structure[key.toString()] = value;
-            event = check self.parser.parse();
+            event = check self.parser.parse(true);
         }
 
         return structure;
