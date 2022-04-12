@@ -378,7 +378,7 @@ class Lexer {
                 Token token = self.generateToken(MAPPING_KEY);
 
                 // Capture the for empty key mapping values
-                if (self.index == 0 || self.line.trim()[0] == ":") && self.numOpenedFlowCollections == 0 {
+                if self.numOpenedFlowCollections == 0 {
                     token.indentation = check self.checkIndent(self.index);
                 }
                 return token;

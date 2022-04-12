@@ -171,20 +171,7 @@ class Parser {
             }
             MAPPING_KEY => { // Explicit key
                 self.explicitKey = true;
-                ()|LexicalError|ParsingError err = self.separate();
-
-                // There are tokens after the explicit key
-                if err is () {
-                    return self.appendData(option);
-                }
-
-                // Only the explicit key is in document
-                if self.lineIndex >= self.numLines - 1 {
-                    self.eventBuffer.push({value: ()});
-                    return {value: ()};
-                }
-
-                return err;
+                return self.appendData(option);
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
@@ -644,7 +631,12 @@ class Parser {
     }
 
     private function appendData(ParserOption option, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
-        // Obtain the flow node value
+        Indentation? indentation = ();
+        if self.explicitKey {
+            indentation = self.currentToken.indentation;
+            check self.separate(true);
+        }
+
         string|EventType|LexicalError|ParsingError value = self.content(peeked);
         Event? buffer = ();
 
@@ -663,18 +655,19 @@ class Parser {
                         self.eventBuffer.push({endType: MAPPING});
                         return {value: ()};
                     }
+                    _ => {
+                        return value;
+                    }
                 }
             } else {
                 return value;
             }
         }
 
-        Indentation? indentation = self.currentToken.indentation;
-
-        // If the key is explicit, then the indentation is stored in the mapping value.
-        if indentation == () && self.explicitKey {
-            indentation = self.tokenBuffer.indentation;
+        if !self.explicitKey {
+            indentation = self.currentToken.indentation;
         }
+
         self.explicitKey = false;
 
         // Check if the current node is a key
