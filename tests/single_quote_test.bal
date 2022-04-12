@@ -32,7 +32,8 @@ function planarDataGen() returns map<[string, string]> {
         "-": ["--", "--"],
         "ignore-comment": ["plain #comment", "plain"],
         "#": ["plain#comment", "plain#comment"],
-        "space": ["plain space", "plain space"]
+        "space": ["plain space", "plain space"],
+        "single character": ["a", "a"]
     };
 }
 
@@ -67,12 +68,11 @@ function testFlowKeyEvent(string line, string? key, string? value) returns error
 function flowKeyDataGen() returns map<[string, string?, string?]> {
     return {
         "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
-        // "omitted value": ["omitted value: ", "omitted value", ()],
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
         "json-key with space value": ["'json-key': \"json\"", "json-key", "json"],
         "json-key with space key": ["'json-key' : \"json\"", "json-key", "json"],
-        "explicit": ["? explicit: value", "explicit", "value"],
+        "explicit": ["{? explicit: value}", "explicit", "value"],
         "double mapping values": ["'json-key'::planar", "json-key", ":planar"],
         "no key": [": value", (), "value"]
     };

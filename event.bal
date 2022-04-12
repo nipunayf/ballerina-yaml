@@ -8,15 +8,12 @@ type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
     string? tagHandle  = ();
-    boolean isKey = false;
-    boolean entry = false;
 |};
 
 type ScalarEvent record {|
     *NodeEvent;
     string? value;
 |};
-
 
 type DocumentStartEvent record {|
     boolean explicit = false;

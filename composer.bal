@@ -49,12 +49,7 @@ class Composer {
             }
 
             sequence.push(check self.composeNode(event));
-            if self.buffer == () {
-                event = check self.parser.parse();
-            } else {
-                event = <Event>self.buffer;
-                self.buffer = ();
-            }
+            event = check self.parser.parse();
         }
 
         return sequence;
@@ -62,7 +57,7 @@ class Composer {
 
     private function composeMapping(boolean flowStyle) returns map<anydata>|LexicalError|ParsingError|ComposingError {
         map<anydata> structure = {};
-        Event event = check self.parser.parse();
+        Event event = check self.parser.parse(EXPECT_KEY);
 
         while true {
             if event is EndEvent {
@@ -94,21 +89,11 @@ class Composer {
             }
 
             anydata key = check self.composeNode(event);
-            event = check self.parser.parse();
+            event = check self.parser.parse(EXPECT_VALUE);
             anydata value = check self.composeNode(event);
 
             structure[key.toString()] = value;
-            if self.buffer == () {
-                event = check self.parser.parse();
-            } else {
-                event = <Event>self.buffer;
-                self.buffer = ();
-            }
-
-            if event is StartEvent|ScalarEvent && event.entry {
-                self.buffer = event;
-                break;
-            }
+            event = check self.parser.parse(EXPECT_KEY);
         }
 
         return structure;

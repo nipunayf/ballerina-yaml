@@ -1,3 +1,9 @@
+public enum ParserOption {
+    DEFAULT,
+    EXPECT_KEY,
+    EXPECT_VALUE
+}
+
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -15,15 +21,12 @@ class Parser {
     # Used later when the checkToken method is invoked.
     private Token tokenBuffer = {token: DUMMY};
 
-    # Hold the lexemes until the final value is generated
-    private string lexemeBuffer = "";
-
     # Lexical analyzer tool for getting the tokens
-    Lexer lexer = new Lexer();
+    Lexer lexer = new ();
 
     # Flag is set if an empty node is possible to expect
     private boolean expectEmptyNode = false;
-    private boolean sequenceEntry = false;
+    private boolean explicitKey = false;
 
     map<string> tagHandles = {};
 
@@ -40,8 +43,9 @@ class Parser {
 
     # Parse the initialized array of strings
     #
+    # + option - To expect the next event to be a key
     # + return - Lexical or parsing error on failure
-    public function parse() returns Event|LexicalError|ParsingError {
+    public function parse(ParserOption option = DEFAULT) returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
             return self.eventBuffer.shift();
@@ -90,7 +94,7 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                return self.appendData(peeked = true);
+                return self.appendData(option, peeked = true);
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -112,7 +116,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData({tag, tagHandle, anchor});
+                return self.appendData(option, {tag, tagHandle, anchor});
             }
             TAG => {
                 // Obtain the tag name
@@ -124,7 +128,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData({tag, anchor});
+                return self.appendData(option, {tag, anchor});
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -138,7 +142,7 @@ class Parser {
                 string? tag;
                 [tagHandle, tag] = check self.nodeTagHandle();
 
-                return self.appendData({tagHandle, tag, anchor});
+                return self.appendData(option, {tagHandle, tag, anchor});
             }
             MAPPING_VALUE => { // Empty node as the key
                 Indentation? indentation = self.currentToken.indentation;
@@ -162,9 +166,12 @@ class Parser {
                     }
                 }
             }
+            SEPARATOR => { // Empty node as the value in flow mappings
+                return {value: ()};
+            }
             MAPPING_KEY => { // Explicit key
-                check self.separate();
-                return self.appendData();
+                self.explicitKey = true;
+                return self.appendData(option);
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
@@ -175,7 +182,6 @@ class Parser {
                         return {startType: SEQUENCE};
                     }
                     0 => { // Sequence entry
-                        self.sequenceEntry = true;
                         return self.parse();
                     }
                     -1 => { //Indent decrease 
@@ -246,15 +252,16 @@ class Parser {
         self.lexer.state = LEXER_DIRECTIVE;
 
         // Expect yaml version
-        check self.checkToken(DECIMAL, true);
+        check self.checkToken(DECIMAL);
+        string lexemeBuffer = self.currentToken.value;
         check self.checkToken(DOT);
-        self.lexemeBuffer += ".";
-        check self.checkToken(DECIMAL, true);
+        lexemeBuffer += ".";
+        check self.checkToken(DECIMAL);
+        lexemeBuffer += self.currentToken.value;
 
         // Update the version
         if (self.yamlVersion is null) {
-            self.yamlVersion = self.lexemeBuffer;
-            self.lexemeBuffer = "";
+            self.yamlVersion = lexemeBuffer;
             return;
         }
 
@@ -325,6 +332,7 @@ class Parser {
             check self.checkToken();
         }
 
+        check self.verifyKey(isFirstLine);
         return lexemeBuffer;
     }
 
@@ -377,19 +385,26 @@ class Parser {
             check self.checkToken();
         }
 
+        check self.verifyKey(isFirstLine);
+        return lexemeBuffer;
+    }
+
+    private function verifyKey(boolean isFirstLine) returns LexicalError|ParsingError|() {
+        if self.explicitKey {
+            return;
+        }
         self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
         if self.tokenBuffer.token == MAPPING_VALUE && !isFirstLine {
             return self.generateError("Single-quoted keys cannot span multiple lines");
         }
-
-        return lexemeBuffer;
     }
 
     private function planarScalar() returns ParsingError|LexicalError|string {
         // Process the first planar char
         string lexemeBuffer = self.currentToken.value;
         boolean emptyLine = false;
+        boolean isFirstLine = true;
 
         check self.checkToken(peek = true);
 
@@ -410,6 +425,8 @@ class Parser {
                 }
                 EOL => {
                     check self.checkToken();
+                    isFirstLine = false;
+
                     // Terminate at the end of the line
                     if self.lineIndex == self.numLines - 1 {
                         break;
@@ -440,6 +457,8 @@ class Parser {
             }
             check self.checkToken(peek = true);
         }
+
+        check self.verifyKey(isFirstLine);
         return self.trimTailWhitespace(lexemeBuffer);
     }
 
@@ -452,22 +471,22 @@ class Parser {
         boolean isFirstLine = true;
         boolean prevTokenIndented = false;
 
-        check self.checkToken();
+        check self.checkToken(peek = true);
 
         while true {
-            match self.currentToken.token {
+            match self.tokenBuffer.token {
                 PRINTABLE_CHAR => {
                     if !isFirstLine {
                         string suffixChar = "\n";
-                        if isFolded && prevTokenIndented && self.currentToken.value[0] != " " {
+                        if isFolded && prevTokenIndented && self.tokenBuffer.value[0] != " " {
                             suffixChar = newLineBuffer.length() == 0 ? " " : "";
                         }
                         lexemeBuffer += newLineBuffer + suffixChar;
                         newLineBuffer = "";
                     }
 
-                    lexemeBuffer += self.currentToken.value;
-                    prevTokenIndented = self.currentToken.value[0] != " ";
+                    lexemeBuffer += self.tokenBuffer.value;
+                    prevTokenIndented = self.tokenBuffer.value[0] != " ";
                     isFirstLine = false;
                 }
                 EOL => {
@@ -495,15 +514,17 @@ class Parser {
                     }
                     check self.initLexer();
                     check self.checkToken();
+                    check self.checkToken(peek = true);
 
                     // Ignore the tokens inside trailing comments
-                    while self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+                    while self.tokenBuffer.token == EOL || self.tokenBuffer.token == EMPTY_LINE {
                         // Terminate at the end of the line
                         if self.lineIndex == self.numLines - 1 {
                             break;
                         }
                         check self.initLexer();
                         check self.checkToken();
+                        check self.checkToken(peek = true);
                     }
 
                     self.lexer.trailingComment = false;
@@ -514,6 +535,7 @@ class Parser {
                 }
             }
             check self.checkToken();
+            check self.checkToken(peek = true);
         }
 
         // Adjust the tail based on the chomping values
@@ -608,27 +630,50 @@ class Parser {
         return [tagHandle, tag, anchor];
     }
 
-    private function appendData(map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
-        // Obtain the flow node value
-        string|EventType value = check self.content(peeked);
+    private function appendData(ParserOption option, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
+        Indentation? indentation = ();
+        if self.explicitKey {
+            indentation = self.currentToken.indentation;
+            check self.separate(true);
+        }
+
+        string|EventType? value = check self.content(peeked);
         Event? buffer = ();
 
-        Indentation? indentation = self.currentToken.indentation;
-        // if self.currentToken.indentation {
-        //     int decrease = self.lexer.getSequenceIndentChange();
-        //     if decrease > 1 {
-        //         foreach int i in 2 ... decrease {
-        //             self.eventBuffer.push({endType: SEQUENCE});
-        //         }
-        //         buffer = {endType: SEQUENCE};
-        //     }
-        //     if decrease == 1 {
-        //         buffer = {endType: SEQUENCE};
-        //     }
-        // }
+        if !self.explicitKey {
+            indentation = self.currentToken.indentation;
+        }
+
+        self.explicitKey = false;
 
         // Check if the current node is a key
-        _ = check self.isNodeKey();
+        boolean isJsonKey = self.lexer.isJsonKey;
+
+        // Ignore the whitespace and lines if there is any
+        check self.separate(true);
+        check self.checkToken(peek = true);
+
+        // Check if the next token is a mapping value or    
+        if self.tokenBuffer.token == MAPPING_VALUE || self.tokenBuffer.token == SEPARATOR {
+            check self.checkToken();
+        }
+
+        // If there are no whitespace, and the current token is ':'
+        if self.currentToken.token == MAPPING_VALUE {
+            self.lexer.isJsonKey = false;
+            check self.separate(isJsonKey, true);
+            if option == EXPECT_VALUE {
+                buffer = {value: ()};
+            }
+        }
+
+        // If there ano no whitespace, and the current token is ","
+        if self.currentToken.token == SEPARATOR {
+            check self.separate(true);
+            if option == EXPECT_KEY {
+                self.eventBuffer.push({value: ()});
+            }
+        }
 
         if indentation is Indentation {
             match indentation.change {
@@ -650,13 +695,7 @@ class Parser {
             }
         }
 
-        boolean entry = false;
-        if self.sequenceEntry {
-            entry = true;
-            self.sequenceEntry = false;
-        }
-
-        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value, entry} : {value: value, entry});
+        Event event = check self.constructEvent(tagStructure, value is EventType ? {startType: value} : {value});
 
         if buffer == () {
             return event;
@@ -665,14 +704,14 @@ class Parser {
         return buffer;
     }
 
-    private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
-        self.lexer.state = LEXER_START;
+    private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError|() {
+        self.lexer.state = self.explicitKey ? LEXER_EXPLICIT_KEY : LEXER_START;
 
         if !peeked {
             check self.checkToken();
         }
 
-        // Check for flow scalars
+        // Check for flow and block nodes
         match self.currentToken.token {
             SINGLE_QUOTE_DELIMITER => {
                 self.lexer.isJsonKey = true;
@@ -692,31 +731,41 @@ class Parser {
                 return MAPPING;
             }
             LITERAL|FOLDED => {
-                if self.lexer.context == FLOW_ENTRY || self.lexer.context == FLOW_IN || self.lexer.context == FLOW_OUT {
+                if self.lexer.numOpenedFlowCollections > 0 {
                     return self.generateError("Cannot have a block node inside a flow node");
                 }
-
                 return self.blockScalar(self.currentToken.token == FOLDED);
             }
         }
+
+        // Check for empty nodes with explicit keys
+        if self.explicitKey {
+            match self.currentToken.token {
+                MAPPING_VALUE => {
+                    return;
+                }
+                SEPARATOR => {
+                    self.eventBuffer.push({value: ()});
+                    return;
+                }
+                MAPPING_END => {
+                    self.eventBuffer.push({value: ()});
+                    self.eventBuffer.push({endType: MAPPING});
+                    return;
+                }
+                EOL => { // Only the mapping key
+                    self.eventBuffer.push({value: ()});
+                    return;
+                }
+            }
+        }
+
         return self.generateError(check self.formatErrorMessage(1, "<data-node>", self.prevToken));
     }
 
     private function separate(boolean optional = false, boolean allowEmptyNode = false) returns ()|LexicalError|ParsingError {
         self.lexer.state = LEXER_START;
         check self.checkToken(peek = true);
-
-        // Only separation-in-line is considered for keys
-        if self.lexer.context == BLOCK_KEY || self.lexer.context == FLOW_KEY {
-            // If separate is optional, skip the check when no separate-in-line is detected
-            if optional && self.tokenBuffer.token != SEPARATION_IN_LINE {
-                return;
-            }
-
-            check self.checkToken();
-            return self.currentToken.token == SEPARATION_IN_LINE ? ()
-                : self.generateError(check self.formatErrorMessage(1, SEPARATION_IN_LINE, self.prevToken));
-        }
 
         // If separate is optional, skip the check when either EOL or separate-in-line is not detected.
         if optional && !(self.tokenBuffer.token == EOL || self.tokenBuffer.token == SEPARATION_IN_LINE) {
@@ -754,6 +803,7 @@ class Parser {
                     if self.tokenBuffer.token != EOL {
                         return;
                     }
+                    check self.checkToken();
                 }
                 _ => {
                     return;
@@ -762,48 +812,6 @@ class Parser {
         }
 
         return self.generateError(check self.formatErrorMessage(1, [EOL, SEPARATION_IN_LINE], self.currentToken.token));
-    }
-
-    private function isNodeKey() returns boolean|LexicalError|ParsingError {
-        boolean isJsonKey = self.lexer.isJsonKey;
-
-        // If there are no whitespace, and the current token is ':'
-        if self.currentToken.token == MAPPING_VALUE {
-            self.lexer.isJsonKey = false;
-            self.lexer.context = FLOW_IN;
-            check self.separate(isJsonKey, true);
-            self.expectEmptyNode = true;
-            return true;
-        }
-
-        // If there ano no whitespace, and the current token is ","
-        if self.currentToken.token == SEPARATOR {
-            check self.separate(true);
-            self.lexer.context = FLOW_KEY;
-            return true;
-        }
-
-        // There are whitespace, and consider next tokens for either ":" or ","
-        check self.separate(true);
-        check self.checkToken(peek = true);
-
-        if self.tokenBuffer.token == MAPPING_VALUE {
-            check self.checkToken();
-            self.lexer.isJsonKey = false;
-            self.lexer.context = FLOW_IN;
-            check self.separate(isJsonKey, true);
-            self.expectEmptyNode = true;
-            return true;
-        }
-
-        if self.tokenBuffer.token == SEPARATOR {
-            check self.checkToken();
-            check self.separate(true);
-            self.lexer.context = FLOW_KEY;
-            return true;
-        }
-
-        return false;
     }
 
     private function constructEvent(map<anydata> m1, map<anydata>? m2 = ()) returns Event|ParsingError {
@@ -827,7 +835,7 @@ class Parser {
     private function trimTailWhitespace(string value) returns string {
         int i = value.length() - 1;
 
-        if i < 1 {
+        if i < 0 {
             return "";
         }
 
@@ -864,11 +872,10 @@ class Parser {
     # Hence, the error checking must be done explicitly.
     #
     # + expectedTokens - Predicted token or tokens  
-    # + addToLexeme - If set, add the value of the token to lexemeBuffer.  
     # + customMessage - Error message to be displayed if the expected token not found  
     # + peek - Stores the token in the buffer
     # + return - Parsing error if not found
-    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, boolean addToLexeme = false, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
+    private function checkToken(YAMLToken|YAMLToken[] expectedTokens = DUMMY, string customMessage = "", boolean peek = false) returns (LexicalError|ParsingError)? {
         Token token;
 
         // Obtain a token form the lexer if there is none in the buffer.
@@ -906,10 +913,6 @@ class Parser {
             if (expectedTokens.indexOf(token.token) == ()) {
                 return self.generateError(errorMessage);
             }
-        }
-
-        if (addToLexeme) {
-            self.lexemeBuffer += self.currentToken.value;
         }
     }
 

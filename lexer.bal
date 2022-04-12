@@ -19,6 +19,7 @@ enum RegexPattern {
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
+    LEXER_EXPLICIT_KEY,
     LEXER_TAG_HANDLE,
     LEXER_TAG_PREFIX,
     LEXER_TAG_NODE,
@@ -27,16 +28,6 @@ enum State {
     LEXER_SINGLE_QUOTE,
     LEXER_BLOCK_HEADER,
     LEXER_LITERAL
-}
-
-# Represents the different contexts of the Lexer introduced in the YAML specification.
-enum Context {
-    BLOCK_IN,
-    BLOCK_OUT,
-    BLOCK_KEY,
-    FLOW_IN,
-    FLOW_OUT,
-    FLOW_KEY
 }
 
 type Indent record {|
@@ -67,6 +58,9 @@ class Lexer {
     # Minimum indentation required to the current line
     int indent = -1;
 
+    # Additional indent set by the indentation indicator
+    int addIndent = 1;
+
     # Represent the number of opened flow collections  
     int numOpenedFlowCollections = 0;
 
@@ -75,9 +69,6 @@ class Lexer {
 
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
-
-    # Represents the current context of the parser
-    Context context = BLOCK_OUT;
 
     # Flag is enabled after a JSON key is detected.
     # Used to generate mapping value even when it is possible to generate a planar scalar.
@@ -88,6 +79,8 @@ class Lexer {
 
     # When flag is set, updates the current indent to the indent of the first line
     boolean captureIndent = false;
+
+    boolean enforceMapping = false;
 
     private map<string> escapedCharMap = {
         "0": "\u{00}",
@@ -151,6 +144,9 @@ class Lexer {
             LEXER_START => {
                 return self.stateStart();
             }
+            LEXER_EXPLICIT_KEY => {
+                return self.stateExplicitKey();
+            }
             LEXER_TAG_HANDLE => {
                 return self.stateTagHandle();
             }
@@ -194,12 +190,9 @@ class Lexer {
 
         // Terminating delimiter
         if self.peek() == "\"" {
-            Token token = self.generateToken(DOUBLE_QUOTE_DELIMITER);
-            if self.peek(1) == ":" {
-
-            }
-            return token;
+            return self.scanMappingValueKeyWithDelimiter(DOUBLE_QUOTE_DELIMITER);
         }
+
         // Regular double quoted characters
         if self.matchRegexPattern(JSON_PATTERN, exclusionPatterns = ["\""]) {
             return self.iterate(self.scanDoubleQuoteChar, DOUBLE_QUOTE_CHAR);
@@ -367,24 +360,32 @@ class Lexer {
                 return self.iterate(self.scanAnchorName, ANCHOR);
             }
             ":" => {
-                self.lexeme += ":";
                 if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+                    self.lexeme += ":";
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
                 Token token = self.generateToken(MAPPING_VALUE);
-                if self.index == 0 || self.line.trim()[0] == ":" {
-                    token.indentation = check self.checkIndent(self.index);
+
+                // Capture the for empty key mapping values
+                if (self.index == 0 || self.line.trim()[0] == ":") && self.numOpenedFlowCollections == 0 {
+                    token.indentation = check self.checkIndent(self.index - 1);
                 }
                 return token;
             }
             "?" => {
-                self.lexeme += "?";
                 if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+                    self.lexeme += "?";
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
-                return self.generateToken(MAPPING_KEY);
+                Token token = self.generateToken(MAPPING_KEY);
+
+                // Capture the for empty key mapping values
+                if self.numOpenedFlowCollections == 0 {
+                    token.indentation = check self.checkIndent(self.index - 1);
+                }
+                return token;
             }
             "\"" => { // Process double quote flow style value
                 self.delimiterStartIndex = self.index;
@@ -417,7 +418,7 @@ class Lexer {
                 return self.generateToken(MAPPING_END);
             }
             "|"|">" => { // Block scalars
-                self.indent += 1;
+                self.addIndent = 1;
                 self.captureIndent = true;
                 return self.generateToken(self.peek() == "|" ? LITERAL : FOLDED);
             }
@@ -428,7 +429,42 @@ class Lexer {
             return self.scanMappingValueKey(PLANAR_CHAR, self.scanPlanarChar);
         }
 
-        return self.generateError(self.formatErrorMessage("document prefix"));
+        return self.generateError(self.formatErrorMessage("<yaml-document>"));
+    }
+
+    private function stateExplicitKey() returns Token|LexicalError {
+        match self.peek() {
+            " " => {
+                // Return empty line if there is only whitespace
+                // Else, return separation in line
+                boolean isFirstChar = self.index == 0;
+                Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+                return (self.peek() == () && isFirstChar) ? self.generateToken(EMPTY_LINE) : token;
+            }
+            "#" => { // Ignore comments
+                return self.generateToken(EOL);
+            }
+            ":" => {
+                if self.numOpenedFlowCollections > 0 {
+                    return self.generateToken(MAPPING_VALUE);
+                }
+
+                // Mapping value and mapping key should have the same indent.
+                if self.indents[self.indents.length() - 1].index == self.index {
+                    return self.generateToken(MAPPING_VALUE);
+                }
+                return self.generateError("Invalid indentation");
+            }
+        }
+
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
+            if self.numOpenedFlowCollections == 0 {
+                check self.assertIndent(1);
+            }
+            return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+        }
+
+        return self.stateStart();
     }
 
     private function stateTagHandle() returns Token|LexicalError {
@@ -528,8 +564,8 @@ class Lexer {
     private function stateBlockHeader() returns Token|LexicalError {
         // Check for indentation indicators and adjust the current indent
         if self.matchRegexPattern("1-9") {
-            int indentationIndicator = <int>(check self.processTypeCastingError('int:fromString(<string>self.peek()))) - 1;
-            self.indent += indentationIndicator;
+            self.captureIndent = false;
+            self.addIndent += <int>(check self.processTypeCastingError('int:fromString(<string>self.peek()))) - 1;
             self.forward();
         }
 
@@ -548,38 +584,64 @@ class Lexer {
     }
 
     private function stateLiteral() returns Token|LexicalError {
-        // Check for comments in trailing comments
-        if self.trailingComment {
+
+        // Check if the line has sufficient indent to be process as a block scalar.
+        boolean hasSufficientIndent = true;
+        foreach int i in 0 ... (self.indent < 0 ? 0 : self.indent) + self.addIndent - 1 {
+            if !(self.peek() == " ") {
+                hasSufficientIndent = false;
+                break;
+            }
+            self.forward();
+        }
+
+        // There is no sufficient indent to consider printable characters
+        if !hasSufficientIndent {
+            if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
+                self.enforceMapping = true;
+                return self.stateStart();
+            }
+
             match self.peek() {
-                " " => {
-                    _ = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
-                    match self.peek() {
-                        "#" => { // New line comments are allowed in trailing comments
-                            return self.generateToken(EOL);
-                        }
-                        () => { // Empty lines are allowed in trailing comments
-                            return self.generateToken(EMPTY_LINE);
-                        }
-                        _ => { // Any other characters are not allowed
-                            return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
-                        }
-                    }
+                "#" => { // Generate beginning of the trailing comment
+                    return self.trailingComment ? self.generateToken(EOL) : self.generateToken(TRAILING_COMMENT);
                 }
-                "#" => { // New line comments are allowed in trailing comments
-                    return self.generateToken(EOL);
+                "'"|"\"" => { // Possible flow scalar
+                    self.enforceMapping = true;
+                    return self.stateStart();
                 }
-                _ => { // Any other characters are not allowed
-                    return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
+                ":" => {
+                    return self.stateStart();
+                }
+                "-" => { // Possible sequence entry
+                    return self.stateStart();
+                }
+                () => { // Empty lines are allowed in trailing comments
+                    return self.generateToken(EMPTY_LINE);
+                }
+                _ => { // Other characters are not allowed when the indentation is less
+                    return self.generateError("Insufficient indent to process literal characters");
                 }
             }
         }
 
-        // There is no sufficient indent to consider printable characters
-        if !self.scanIndent() {
-            // Generate beginning of the trailing comment
-            return self.peek() == "#" ? self.generateToken(TRAILING_COMMENT)
-                //Other characters are not allowed when the indentation is less
-                : self.generateError("Insufficient indent to process literal characters");
+        if self.trailingComment {
+            while true {
+                match self.peek() {
+                    " " => { // Ignore whitespace
+                        self.forward();
+                    }
+                    "#" => { // Generate beginning of the trailing comment
+                        return self.generateToken(EOL);
+                    }
+                    () => { // Empty lines are allowed in trailing comments
+                        return self.generateToken(EMPTY_LINE);
+                    }
+                    _ => {
+                        return self.generateError(self.formatErrorMessage(TRAILING_COMMENT));
+                    }
+                }
+            }
         }
 
         // Generate an empty lines that have less index.
@@ -596,7 +658,7 @@ class Lexer {
                 self.forward();
             }
 
-            self.indent += additionalIndent;
+            self.addIndent += additionalIndent;
             self.captureIndent = false;
         }
 
@@ -750,10 +812,13 @@ class Lexer {
             return true;
         }
 
+        // Terminate when the flow indicators are detected inside flow style collections
+        if self.matchRegexPattern([FLOW_INDICATOR_PATTERN]) && self.numOpenedFlowCollections > 0 {
+            return true;
+        }
+
         // Process ns-plain-safe character
-        if self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
-        [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN, "#", ":"]
-        : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, "#", ":"]) {
             self.lexeme += whitespace + <string>self.peek();
             return false;
         }
@@ -770,9 +835,7 @@ class Lexer {
 
         // Check for mapping value with a space after it 
         if self.peek() == ":" {
-            if !self.matchRegexPattern([PRINTABLE_PATTERN], self.context == FLOW_KEY || self.context == FLOW_IN ?
-                [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN]
-                : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+            if !self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
                 self.forward(-numWhitespace);
                 return true;
             }
@@ -933,19 +996,6 @@ class Lexer {
         return true;
     }
 
-    # Scan the whitespace to build an indent.
-    #
-    # + return - Returns true if there are sufficient whitespace to build the indent.
-    private function scanIndent() returns boolean {
-        foreach int i in 0 ... self.indent {
-            if !(self.peek() == " ") {
-                return false;
-            }
-            self.forward();
-        }
-        return true;
-    }
-
     # Validates the indentation of block collections.
     # Increments and decrement the indentation safely.
     # If the indent is explicitly given, then the function continues for mappings.
@@ -955,23 +1005,41 @@ class Lexer {
     public function checkIndent(int? mapIndex = ()) returns Indentation|LexicalError {
         int startIndex = mapIndex == () ? self.index - 1 : mapIndex;
 
-        // Check if the current indent exists with a different type
-        EventType[] existingIndentType = from Indent indent in self.indents
-            where indent.index == startIndex
-            limit 1
-            select indent.collection;
-
-        if mapIndex is int && existingIndentType.indexOf(<EventType>SEQUENCE) is int {
-            return self.generateError("Block mapping cannot have the same indent as a block sequence");
-        }
-
-        if mapIndex is () && existingIndentType.indexOf(<EventType>MAPPING) is int {
-            return self.generateError("Block sequence cannot have the same indent as a block mapping");
-        }
-
         EventType collection = mapIndex == () ? SEQUENCE : MAPPING;
 
         if self.indent == startIndex {
+            EventType[] existingIndentType = from Indent indent in self.indents
+                where indent.index == startIndex
+                select indent.collection;
+
+            // The current token is a mapping key and a sequence entry exists for the indent
+            if mapIndex is int && existingIndentType.indexOf(<EventType>SEQUENCE) is int {
+                if existingIndentType.indexOf(<EventType>MAPPING) is int {
+                    return {
+                        change: -1,
+                        collection: [self.indents.pop().collection]
+                    };
+                } else {
+                    return self.generateError("Block mapping cannot have the same indent as a block sequence");
+                }
+            }
+
+            // The current token is a sequence entry and a mapping key exists for the indent
+            if mapIndex is () && existingIndentType.indexOf(<EventType>MAPPING) is int {
+                if existingIndentType.indexOf(<EventType>SEQUENCE) is int {
+                    return {
+                        change: 0,
+                        collection: []
+                    };
+                } else {
+                    self.indents.push({index: startIndex, collection: SEQUENCE});
+                    return {
+                        change: 1,
+                        collection: [SEQUENCE]
+                    };
+                }
+            }
+
             return {
                 change: 0,
                 collection: []
@@ -987,12 +1055,22 @@ class Lexer {
             };
         }
 
-        Indent removedIndent;
+        Indent? removedIndent = ();
         EventType[] returnCollection = [];
         while self.indent > startIndex {
             removedIndent = self.indents.pop();
-            self.indent = removedIndent.index;
-            returnCollection.push(removedIndent.collection);
+            self.indent = (<Indent>removedIndent).index;
+            returnCollection.push((<Indent>removedIndent).collection);
+        }
+
+        if self.indents.length() > 0 && removedIndent is Indent {
+            Indent removedSecondIndent = self.indents.pop();
+            if removedSecondIndent.index == startIndex && collection == MAPPING {
+                returnCollection.push(removedIndent.collection);
+                removedIndent = removedSecondIndent;
+            } else {
+                self.indents.push(removedSecondIndent);
+            }
         }
 
         if self.indent == startIndex {
@@ -1008,62 +1086,12 @@ class Lexer {
 
         return self.generateError("Invalid indentation");
     }
-    // public function checkIndent(int? mapIndex = ()) returns LexicalError? {
-    //     int startIndex = mapIndex == () ? self.index : mapIndex;
-    //     if mapIndex is int && self.seqIndents.indexOf(startIndex) is int {
-    //         return self.generateError("Block mapping cannot have the same indent as a block sequence");
-    //     }
-
-    //     int[] indents = mapIndex == () ? self.seqIndents : self.mapIndents;
-
-    //     if self.indent == startIndex {
-    //         return;
-    //     }
-
-    //     if self.indent < startIndex {
-    //         indents.push(startIndex);
-    //         if mapIndex == () {
-    //             self.lexeme = "+";
-    //         }
-    //         self.indent = startIndex;
-    //         return;
-    //     }
-
-    //     int decrease = 0;
-    //     while self.indent > startIndex {
-    //         self.indent = indents.pop();
-    //         decrease += 1;
-    //     }
-
-    //     if self.indent == startIndex {
-    //         indents.push(self.indent);
-    //         if mapIndex == () && decrease > 1 {
-    //             self.lexeme = "-" + (decrease - 1).toString();
-    //         }
-    //         return;
-    //     }
-
-    //     return self.generateError("Invalid indentation");
-    // }
 
     private function assertIndent(int offset = 0) returns LexicalError? {
         if self.index < self.indent + offset {
             return self.generateError("Invalid indentation");
         }
     }
-
-    // function getSequenceIndentChange() returns int {
-    //     if self.seqIndents.length() == 0 {
-    //         return 0;
-    //     }
-    //     int decrease = 0;
-    //     int seqIndent = self.seqIndents[self.seqIndents.length() - 1];
-    //     while self.indent < seqIndent && self.seqIndents.length() > 0 {
-    //         seqIndent = self.seqIndents.pop();
-    //         decrease += 1;
-    //     }
-    //     return decrease;
-    // }
 
     # Check for the lexemes to crete an DECIMAL token.
     #
@@ -1079,11 +1107,10 @@ class Lexer {
         };
     }
 
-    // startIndent = startIndex;
-    // token = self.generateToken(outputToken);
-    // return startIndex == () ? self.generateError("Invalid indentation") : token;
     private function scanMappingValueKey(YAMLToken outputToken, function () returns boolean|LexicalError process) returns Token|LexicalError {
         LexicalError? err = self.assertIndent(1);
+        boolean enforceMapping = self.enforceMapping;
+        self.enforceMapping = false;
 
         int startIndent = self.index;
         Token token = check self.iterate(process, outputToken);
@@ -1100,22 +1127,24 @@ class Lexer {
         }
 
         if err is LexicalError { // Not sufficient indent to process as a value token
-            if self.peek() == ":" { // The token is a mapping key
+            if self.peek() == ":" && self.numOpenedFlowCollections == 0 { // The token is a mapping key
                 token.indentation = check self.checkIndent(startIndent);
                 return token;
             }
             return self.generateError("Invalid indentation");
         }
-        if self.peek() == ":" {
+        if self.peek() == ":" && self.numOpenedFlowCollections == 0 {
             token.indentation = check self.checkIndent(startIndent);
             return token;
         }
         self.forward(-numWhitespace);
-        return token;
+        return enforceMapping ? self.generateError("Invalid Indentation") : token;
     }
 
     private function scanMappingValueKeyWithDelimiter(YAMLToken outputToken) returns Token|LexicalError {
         Token token = self.generateToken(outputToken);
+        boolean enforceMapping = self.enforceMapping;
+        self.enforceMapping = false;
 
         // Ignore whitespace until a character is found
         int numWhitespace = 0;
@@ -1129,20 +1158,20 @@ class Lexer {
         }
 
         if self.index < self.delimiterStartIndex { // Not sufficient indent to process as a value token
-            if self.peek() == ":" { // The token is a mapping key
+            if self.peek() == ":" && self.numOpenedFlowCollections == 0 { // The token is a mapping key
                 token.indentation = check self.checkIndent(self.delimiterStartIndex);
                 self.delimiterStartIndex = -1;
                 return token;
             }
             return self.generateError("Invalid indentation");
         }
-        if self.peek() == ":" {
+        if self.peek() == ":" && self.numOpenedFlowCollections == 0 {
             token.indentation = check self.checkIndent(self.delimiterStartIndex);
             self.delimiterStartIndex = -1;
             return token;
         }
         self.forward(-numWhitespace);
-        return token;
+        return enforceMapping ? self.generateError("Invalid Indentation") : token;
     }
 
     # Encapsulate a function to run isolated on the remaining characters.

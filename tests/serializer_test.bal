@@ -17,8 +17,8 @@ function serializingEventDataGen() returns map<[anydata, Event[]]> {
         "multiple elements array": [["value1", "value2"], [{startType: SEQUENCE}, {value: "value1"}, {value: "value2"}, {endType: SEQUENCE}]],
         "nested array": [[["value"]], [{startType: SEQUENCE}, {startType: SEQUENCE, flowStyle: true}, {value: "value"}, {endType: SEQUENCE}, {endType: SEQUENCE}]],
         "empty mapping": [{}, [{startType: MAPPING}, {endType: MAPPING}]],
-        "single element mapping": [{"key": "value"}, [{startType: MAPPING}, {value: "key", isKey: true}, {value: "value"}, {endType: MAPPING}]],
-        "multiple elements mapping": [{"key1": "value1", "key2": "value2"}, [{startType: MAPPING}, {value: "key1", isKey: true}, {value: "value1"}, {value: "key2", isKey: true}, {value: "value2"}, {endType: MAPPING}]],
+        "single element mapping": [{"key": "value"}, [{startType: MAPPING}, {value: "key"}, {value: "value"}, {endType: MAPPING}]],
+        "multiple elements mapping": [{"key1": "value1", "key2": "value2"}, [{startType: MAPPING}, {value: "key1"}, {value: "value1"}, {value: "key2"}, {value: "value2"}, {endType: MAPPING}]],
         "single element": ["value", [{value: "value"}]]
     };
 }
