@@ -356,8 +356,8 @@ class Lexer {
                 return self.iterate(self.scanAnchorName, ANCHOR);
             }
             ":" => {
-                self.lexeme += ":";
                 if !self.isJsonKey && self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+                    self.lexeme += ":";
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
@@ -370,12 +370,18 @@ class Lexer {
                 return token;
             }
             "?" => {
-                self.lexeme += "?";
                 if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+                    self.lexeme += "?";
                     self.forward();
                     return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
                 }
-                return self.generateToken(MAPPING_KEY);
+                Token token = self.generateToken(MAPPING_KEY);
+
+                // Capture the for empty key mapping values
+                if (self.index == 0 || self.line.trim()[0] == ":") && self.numOpenedFlowCollections == 0 {
+                    token.indentation = check self.checkIndent(self.index);
+                }
+                return token;
             }
             "\"" => { // Process double quote flow style value
                 self.delimiterStartIndex = self.index;

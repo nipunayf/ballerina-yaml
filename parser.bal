@@ -171,8 +171,20 @@ class Parser {
             }
             MAPPING_KEY => { // Explicit key
                 self.explicitKey = true;
-                check self.separate();
-                return self.appendData(option);
+                ()|LexicalError|ParsingError err = self.separate();
+
+                // There are tokens after the explicit key
+                if err is () {
+                    return self.appendData(option);
+                }
+
+                // Only the explicit key is in document
+                if self.lineIndex >= self.numLines - 1 {
+                    self.eventBuffer.push({value: ()});
+                    return {value: ()};
+                }
+
+                return err;
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
