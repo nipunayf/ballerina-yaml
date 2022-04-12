@@ -637,32 +637,8 @@ class Parser {
             check self.separate(true);
         }
 
-        string|EventType|LexicalError|ParsingError value = self.content(peeked);
+        string|EventType? value = check self.content(peeked);
         Event? buffer = ();
-
-        if value is LexicalError|ParsingError {
-            if self.explicitKey {
-                match self.currentToken.token {
-                    MAPPING_VALUE => {
-                        return {value: ()};
-                    }
-                    SEPARATOR => {
-                        self.eventBuffer.push({value: ()});
-                        return {value: ()};
-                    }
-                    MAPPING_END => {
-                        self.eventBuffer.push({value: ()});
-                        self.eventBuffer.push({endType: MAPPING});
-                        return {value: ()};
-                    }
-                    _ => {
-                        return value;
-                    }
-                }
-            } else {
-                return value;
-            }
-        }
 
         if !self.explicitKey {
             indentation = self.currentToken.indentation;
@@ -728,14 +704,14 @@ class Parser {
         return buffer;
     }
 
-    private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError {
+    private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError|() {
         self.lexer.state = LEXER_START;
 
         if !peeked {
             check self.checkToken();
         }
 
-        // Check for flow scalars
+        // Check for flow and block nodes
         match self.currentToken.token {
             SINGLE_QUOTE_DELIMITER => {
                 self.lexer.isJsonKey = true;
@@ -758,10 +734,32 @@ class Parser {
                 if self.lexer.numOpenedFlowCollections > 0 {
                     return self.generateError("Cannot have a block node inside a flow node");
                 }
-
                 return self.blockScalar(self.currentToken.token == FOLDED);
             }
         }
+
+        // Check for empty nodes with explicit keys
+        if self.explicitKey {
+            match self.currentToken.token {
+                MAPPING_VALUE => {
+                    return;
+                }
+                SEPARATOR => {
+                    self.eventBuffer.push({value: ()});
+                    return;
+                }
+                MAPPING_END => {
+                    self.eventBuffer.push({value: ()});
+                    self.eventBuffer.push({endType: MAPPING});
+                    return;
+                }
+                EOL => { // Only the mapping key
+                    self.eventBuffer.push({value: ()});
+                    return;
+                }
+            }
+        }
+
         return self.generateError(check self.formatErrorMessage(1, "<data-node>", self.prevToken));
     }
 

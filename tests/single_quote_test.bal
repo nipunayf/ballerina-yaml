@@ -68,7 +68,6 @@ function testFlowKeyEvent(string line, string? key, string? value) returns error
 function flowKeyDataGen() returns map<[string, string?, string?]> {
     return {
         "yaml key": ["unquoted : \"value\"", "unquoted", "value"],
-        // "omitted value": ["omitted value: ", "omitted value", ()],
         "json-key yaml-node": ["'json-key':yaml", "json-key", "yaml"],
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
         "json-key with space value": ["'json-key': \"json\"", "json-key", "json"],
