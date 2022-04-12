@@ -21,7 +21,7 @@ function directiveDataGen() returns map<[string, string]> {
 }
 function testAccurateYAMLDirective() returns error? {
     Parser parser = check new Parser(["%YAML 1.3", "---"]);
-    _ = check parser.parse();
+    _ = check parser.parse(docType = ANY_DOCUMENT);
 
     test:assertEquals(parser.yamlVersion, "1.3");
 }
@@ -108,7 +108,7 @@ function testTagDuplicates() returns error? {
 }
 function testTagHandles(string line, string tagHandle, string tagPrefix) returns error? {
     Parser parser = check new Parser([line, "---"]);
-    _ = check parser.parse();
+    _ = check parser.parse(docType = ANY_DOCUMENT);
     test:assertEquals(parser.tagHandles[tagHandle], tagPrefix);
 }
 
@@ -122,5 +122,15 @@ function tagHandlesDataGen() returns map<[string, string, string]> {
 
 @test:Config {}
 function testInvalidContentInDirectiveDocument() returns error? {
-    check assertParsingError(["%TAG ! local", "anything that is not %"], eventNumber = 2);
+    check assertParsingError(["%TAG ! local", "anything that is not %"]);
+}
+
+@test:Config {}
+function testInvalidDirectiveInBareDocument() returns error?{
+    Parser parser = check new (["---", "%TAG ! local"]);
+
+    _ = check parser.parse(docType = ANY_DOCUMENT);
+    error|Event err = parser.parse();
+
+    test:assertTrue(err is ParsingError);
 }
