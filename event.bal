@@ -15,7 +15,6 @@ type ScalarEvent record {|
     string? value;
 |};
 
-
 type DocumentStartEvent record {|
     boolean explicit = false;
     string docVersion;

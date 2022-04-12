@@ -72,7 +72,7 @@ function flowKeyDataGen() returns map<[string, string?, string?]> {
         "json-key json-node": ["'json-key':\"json\"", "json-key", "json"],
         "json-key with space value": ["'json-key': \"json\"", "json-key", "json"],
         "json-key with space key": ["'json-key' : \"json\"", "json-key", "json"],
-        "explicit": ["? explicit: value", "explicit", "value"],
+        "explicit": ["{? explicit: value}", "explicit", "value"],
         "double mapping values": ["'json-key'::planar", "json-key", ":planar"],
         "no key": [": value", (), "value"]
     };

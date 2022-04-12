@@ -705,7 +705,7 @@ class Parser {
     }
 
     private function content(boolean peeked) returns string|EventType|LexicalError|ParsingError|() {
-        self.lexer.state = LEXER_START;
+        self.lexer.state = self.explicitKey ? LEXER_EXPLICIT_KEY : LEXER_START;
 
         if !peeked {
             check self.checkToken();

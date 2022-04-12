@@ -99,10 +99,10 @@ function testExplicitKey(string|string[] line, Event[] eventTree) returns error?
 
 function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
     return {
-        // "single-line key": ["{? explicit: value}", [{startType: MAPPING, flowStyle: true}, {value: "explicit"}, {value: "value"}]],
-        // "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
-        // "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
-        // "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
+        "single-line key": ["{? explicit: value}", [{startType: MAPPING, flowStyle: true}, {value: "explicit"}, {value: "value"}]],
+        "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
+        "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
+        "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
         "empty key in flow mapping": ["{? : value}", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: "value"}]],
         "only explicit key in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
     };
@@ -111,13 +111,14 @@ function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
 @test:Config {
     dataProvider: invalidKeyDataGen
 }
-function testInvalidBlockKeys(string|string[] lines) returns error? {
-    check assertParsingError(lines);
+function testInvalidBlockKeys(string|string[] lines, boolean isLexical) returns error? {
+    check assertParsingError(lines, isLexical);
 }
 
-function invalidKeyDataGen() returns map<[string|string[]]> {
+function invalidKeyDataGen() returns map<[string|string[], boolean]> {
     return {
-        // "explicit key and mapping value without indent": [["? first", "second", " : value"]],
-        "multiline implicit key": [["first", "second", " : value"]]
+        "explicit key and mapping value without indent": [["? first", " second", " : value"], true],
+        "explicit key without indent": [["? first", "second", ": value"], true],
+        "multiline implicit key": [["first", "second", " : value"], false]
     };
 }

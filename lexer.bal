@@ -19,6 +19,7 @@ enum RegexPattern {
 # Represents the state of the Lexer.
 enum State {
     LEXER_START,
+    LEXER_EXPLICIT_KEY,
     LEXER_TAG_HANDLE,
     LEXER_TAG_PREFIX,
     LEXER_TAG_NODE,
@@ -142,6 +143,9 @@ class Lexer {
         match self.state {
             LEXER_START => {
                 return self.stateStart();
+            }
+            LEXER_EXPLICIT_KEY => {
+                return self.stateExplicitKey();
             }
             LEXER_TAG_HANDLE => {
                 return self.stateTagHandle();
@@ -365,7 +369,7 @@ class Lexer {
 
                 // Capture the for empty key mapping values
                 if (self.index == 0 || self.line.trim()[0] == ":") && self.numOpenedFlowCollections == 0 {
-                    token.indentation = check self.checkIndent(self.index);
+                    token.indentation = check self.checkIndent(self.index - 1);
                 }
                 return token;
             }
@@ -379,7 +383,7 @@ class Lexer {
 
                 // Capture the for empty key mapping values
                 if self.numOpenedFlowCollections == 0 {
-                    token.indentation = check self.checkIndent(self.index);
+                    token.indentation = check self.checkIndent(self.index - 1);
                 }
                 return token;
             }
@@ -425,7 +429,42 @@ class Lexer {
             return self.scanMappingValueKey(PLANAR_CHAR, self.scanPlanarChar);
         }
 
-        return self.generateError(self.formatErrorMessage("document prefix"));
+        return self.generateError(self.formatErrorMessage("<yaml-document>"));
+    }
+
+    private function stateExplicitKey() returns Token|LexicalError {
+        match self.peek() {
+            " " => {
+                // Return empty line if there is only whitespace
+                // Else, return separation in line
+                boolean isFirstChar = self.index == 0;
+                Token token = check self.iterate(self.scanWhitespace, SEPARATION_IN_LINE);
+                return (self.peek() == () && isFirstChar) ? self.generateToken(EMPTY_LINE) : token;
+            }
+            "#" => { // Ignore comments
+                return self.generateToken(EOL);
+            }
+            ":" => {
+                if self.numOpenedFlowCollections > 0 {
+                    return self.generateToken(MAPPING_VALUE);
+                }
+
+                // Mapping value and mapping key should have the same indent.
+                if self.indents[self.indents.length() - 1].index == self.index {
+                    return self.generateToken(MAPPING_VALUE);
+                }
+                return self.generateError("Invalid indentation");
+            }
+        }
+
+        if self.matchRegexPattern([PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]) {
+            if self.numOpenedFlowCollections == 0 {
+                check self.assertIndent(1);
+            }
+            return self.iterate(self.scanPlanarChar, PLANAR_CHAR);
+        }
+
+        return self.stateStart();
     }
 
     private function stateTagHandle() returns Token|LexicalError {
