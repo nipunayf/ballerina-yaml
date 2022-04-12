@@ -633,8 +633,29 @@ class Parser {
 
     private function appendData(ParserOption option, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
-        string|EventType value = check self.content(peeked);
+        string|EventType|LexicalError|ParsingError value = self.content(peeked);
         Event? buffer = ();
+
+        if value is LexicalError|ParsingError {
+            if self.explicitKey {
+                match self.currentToken.token {
+                    MAPPING_VALUE => {
+                        return {value: ()};
+                    }
+                    SEPARATOR => {
+                        self.eventBuffer.push({value: ()});
+                        return {value: ()};
+                    }
+                    MAPPING_END => {
+                        self.eventBuffer.push({value: ()});
+                        self.eventBuffer.push({endType: MAPPING});
+                        return {value: ()};
+                    }
+                }
+            } else {
+                return value;
+            }
+        }
 
         Indentation? indentation = self.currentToken.indentation;
 
