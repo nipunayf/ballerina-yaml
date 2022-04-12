@@ -25,7 +25,6 @@ class Parser {
     Lexer lexer = new ();
 
     # Flag is set if an empty node is possible to expect
-    private boolean expectEmptyNode = false;
     private boolean explicitKey = false;
 
     map<string> tagHandles = {};
@@ -61,13 +60,6 @@ class Parser {
 
         match self.currentToken.token {
             EOL|EMPTY_LINE => {
-                // if self.expectEmptyNode {
-                //     self.expectEmptyNode = false;
-                //     return {
-                //         value: ()
-                //     }
-                // }
-
                 if self.lineIndex >= self.numLines - 1 {
                     return {
                         endType: STREAM
