@@ -159,6 +159,9 @@ class Parser {
                     }
                 }
             }
+            SEPARATOR => { // Empty node as the value in flow mappings
+                return {value: ()};
+            }
             MAPPING_KEY => { // Explicit key
                 self.explicitKey = true;
                 check self.separate();

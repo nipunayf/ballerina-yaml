@@ -22,12 +22,12 @@ function nativeDataStructureDataGen() returns map<[string|string[], anydata]> {
         "mapping nested under sequence": [["- first: item1", "  second: item2", "- third: item3"], [{"first": "item1", "second": "item2"}, {"third": "item3"}]],
         "multiple mapping nested under sequence": [["- first:", "    second: item2", "- third: item3"], [{"first": {"second": "item2"}}, {"third": "item3"}]],
         "aliasing a string": [["- &anchor value", "- *anchor"], ["value", "value"]],
-        "aliasing a sequence": [["- &anchor", " - first", " - second", "- *anchor"], [["first", "second"], ["first", "second"]]]
-    // "only explicit key in block mapping": [["?"], {"" : ()}],
-    // "explicit key and mapping value in block mapping": [["?", ":"], {"" : ()}],
-    // "explicit key in block mapping": [["? key"], {"key": ()}],
-    // "explicit key with mapping value in block mapping": [["? key", ":"], {"key": ()}],
-    // "explicit key empty key": [["? ", ": value"], {"": "value"}]
+        "aliasing a sequence": [["- &anchor", " - first", " - second", "- *anchor"], [["first", "second"], ["first", "second"]]],
+        "only explicit key in block mapping": [["?"], {"": ()}],
+        "explicit key and mapping value in block mapping": [["?", ":"], {"": ()}],
+        "explicit key in block mapping": [["? key"], {"key": ()}],
+        "explicit key with mapping value in block mapping": [["? key", ":"], {"key": ()}],
+        "explicit key empty key": [["? ", ": value"], {"": "value"}]
     };
 }
 

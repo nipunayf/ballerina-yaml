@@ -29,7 +29,10 @@ function collectionDataGen() returns map<[string|string[], Event[]]> {
         "mapping scalars to nested sequences with same indent": [["key1: ", "- first", "  - second", "key2: third"], [{startType: MAPPING}, {value: "key1"}, {startType: SEQUENCE}, {value: "first"}, {startType: SEQUENCE}, {value: "second"}, {endType: SEQUENCE}, {endType: SEQUENCE}, {value: "key2"}, {value: "third"}]],
         "mapping scalars to nested mappings with same indent": [["key1: ", "  key2: ", "  - sequence", "key3: mapping"], [{startType: MAPPING}, {value: "key1"}, {startType: MAPPING}, {value: "key2"}, {startType: SEQUENCE}, {value: "sequence"}, {endType: SEQUENCE}, {endType: MAPPING}, {value: "key3"}, {value: "mapping"}]],
         "mapping scalars to mapping sequence with same indent": [["key1: ", "- key2: first", "- second", "key3: third"], [{startType: MAPPING}, {value: "key1"}, {startType: SEQUENCE}, {startType: MAPPING}, {value: "key2"}, {value: "first"}, {endType: MAPPING}, {value: "second"}, {endType: SEQUENCE}, {value: "key3"}, {value: "third"}]],
-        "escaping multiple mappings": [["first: ", "  second: ", "    third: ", "forth: value"], [{startType: MAPPING}, {value: "first"}, {startType: MAPPING}, {value: "second"}, {startType: MAPPING}, {value: "third"}, {endType: MAPPING}, {endType: MAPPING}, {value: "forth"}]]
+        "escaping multiple mappings": [["first: ", "  second: ", "    third: ", "forth: value"], [{startType: MAPPING}, {value: "first"}, {startType: MAPPING}, {value: "second"}, {startType: MAPPING}, {value: "third"}, {endType: MAPPING}, {endType: MAPPING}, {value: "forth"}]],
+        "empty value flow mapping with mapping value": ["{key: ,}", [{startType: MAPPING, flowStyle: true}, {value: "key"}, {value: ()}]],
+        "empty value flow mapping": ["{key,}", [{startType: MAPPING, flowStyle: true}, {value: "key"}, {value: ()}]],
+        "empty values in block mapping": [["first:", "second:"], [{startType: MAPPING}, {value: "first"}, {value: ()}, {value: "second"}]]
     };
 }
 
@@ -102,6 +105,7 @@ function explicitKeysDataGen() returns map<[string|string[], Event[]]> {
         "multiline key": [["{? first", " second", ": value"], [{startType: MAPPING, flowStyle: true}, {value: "first second"}, {value: "value"}]],
         "block planar key": [["? first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
         "block folded scalar key": [["? >-", " first", " second", ": value"], [{startType: MAPPING}, {value: "first second"}, {value: "value"}]],
+        "empty key in flow mapping": ["{? : value}", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: "value"}]],
         "only explicit key in flow mapping": ["{? }", [{startType: MAPPING, flowStyle: true}, {value: ()}, {value: ()}]]
     };
 }
