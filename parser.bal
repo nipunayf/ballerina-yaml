@@ -1,3 +1,9 @@
+public enum ParserOption {
+    DEFAULT,
+    EXPECT_KEY,
+    EXPECT_VALUE
+}
+
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -37,9 +43,9 @@ class Parser {
 
     # Parse the initialized array of strings
     #
-    # + expectKey - To expect the next event to be a key
+    # + option - To expect the next event to be a key
     # + return - Lexical or parsing error on failure
-    public function parse(boolean expectKey = false) returns Event|LexicalError|ParsingError {
+    public function parse(ParserOption option = DEFAULT) returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
             return self.eventBuffer.shift();
@@ -88,7 +94,7 @@ class Parser {
                 };
             }
             DOUBLE_QUOTE_DELIMITER|SINGLE_QUOTE_DELIMITER|PLANAR_CHAR => {
-                return self.appendData(expectKey, peeked = true);
+                return self.appendData(option, peeked = true);
             }
             ALIAS => {
                 string alias = self.currentToken.value;
@@ -110,7 +116,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData(expectKey, {tag, tagHandle, anchor});
+                return self.appendData(option, {tag, tagHandle, anchor});
             }
             TAG => {
                 // Obtain the tag name
@@ -122,7 +128,7 @@ class Parser {
                 // Obtain the anchor if there exists
                 string? anchor = check self.nodeAnchor();
 
-                return self.appendData(expectKey, {tag, anchor});
+                return self.appendData(option, {tag, anchor});
             }
             ANCHOR => {
                 // Obtain the anchor name
@@ -136,7 +142,7 @@ class Parser {
                 string? tag;
                 [tagHandle, tag] = check self.nodeTagHandle();
 
-                return self.appendData(expectKey, {tagHandle, tag, anchor});
+                return self.appendData(option, {tagHandle, tag, anchor});
             }
             MAPPING_VALUE => { // Empty node as the key
                 Indentation? indentation = self.currentToken.indentation;
@@ -166,7 +172,7 @@ class Parser {
             MAPPING_KEY => { // Explicit key
                 self.explicitKey = true;
                 check self.separate();
-                return self.appendData(expectKey);
+                return self.appendData(option);
             }
             SEQUENCE_ENTRY => {
                 if self.currentToken.indentation == () {
@@ -625,7 +631,7 @@ class Parser {
         return [tagHandle, tag, anchor];
     }
 
-    private function appendData(boolean expectKey, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
+    private function appendData(ParserOption option, map<anydata> tagStructure = {}, boolean peeked = false) returns Event|LexicalError|ParsingError {
         // Obtain the flow node value
         string|EventType value = check self.content(peeked);
         Event? buffer = ();
@@ -654,7 +660,7 @@ class Parser {
         if self.currentToken.token == MAPPING_VALUE {
             self.lexer.isJsonKey = false;
             check self.separate(isJsonKey, true);
-            if !expectKey {
+            if option == EXPECT_VALUE {
                 buffer = {value: ()};
             }
         }
@@ -662,7 +668,7 @@ class Parser {
         // If there ano no whitespace, and the current token is ","
         if self.currentToken.token == SEPARATOR {
             check self.separate(true);
-            if expectKey {
+            if option == EXPECT_KEY {
                 self.eventBuffer.push({value: ()});
             }
         }
