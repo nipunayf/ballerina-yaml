@@ -7,11 +7,29 @@ class Composer {
         self.parser = parser;
     }
 
-    public function compose() returns anydata[]|ParsingError|LexicalError|ComposingError {
+    function isEndOfDocument(Event event) returns boolean => event is EndEvent && (event.endType == STREAM || event.endType == DOCUMENT);
+
+    public function composeDocument() returns anydata|ParsingError|LexicalError|ComposingError {
+        // Obtain the root event
+        Event event = check self.parser.parse();
+        if self.isEndOfDocument(event) {
+            return ();
+        }
+
+        // Construct the single document
+        anydata output = check self.composeNode(event);
+
+        // Return an error if there is another root event
+        event = check self.parser.parse();
+        return self.isEndOfDocument(event) ? output
+            : self.generateError("There can only be one root event to a document");
+    }
+
+    public function composeStream() returns anydata[]|ParsingError|LexicalError|ComposingError {
         anydata[] output = [];
         Event event = check self.parser.parse();
 
-        while !(event is EndEvent && event.endType == STREAM) {
+        while !(event is EndEvent && (event.endType == STREAM || event.endType == DOCUMENT)) {
             output.push(check self.composeNode(event));
             event = check self.parser.parse();
         }

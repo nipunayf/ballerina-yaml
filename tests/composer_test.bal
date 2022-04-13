@@ -6,13 +6,14 @@ import ballerina/test;
 function testGenerateNativeDataStructure(string|string[] line, anydata structure) returns error? {
     Parser parser = check new Parser((line is string) ? [line] : line);
     Composer composer = new Composer(parser);
-    anydata[] output = check composer.compose();
+    anydata output = check composer.composeDocument();
 
-    test:assertEquals(output[0], structure);
+    test:assertEquals(output, structure);
 }
 
 function nativeDataStructureDataGen() returns map<[string|string[], anydata]> {
     return {
+        "empty document": ["", ()],
         "empty sequence": ["[]", []],
         "mapping": ["{key: value}", {"key": "value"}],
         "multiple flow-mapping": ["{key1: value1, key2: value2}", {"key1": "value1", "key2": "value2"}],
@@ -40,13 +41,13 @@ function testComposeInvalidEventStream(string[] lines) returns error? {
     Parser parser = check new Parser(lines);
     Composer composer = new Composer(parser);
 
-    anydata[]|error output = composer.compose();
+    anydata|error output = composer.composeDocument();
     test:assertTrue(output is ComposingError);
 }
 
 function invalidEventStreamDataGen() returns map<[string[]]> {
     return {
-        // "multiple root data values": [["|-", " 123", "", ">-", " 123"]],
+        "multiple root data values": [["|-", " 123", "", "-", " 123"]],
         "flow style sequence without end": [["[", " first, ", "second "]],
         "aliasing anchor does note exist": [["*alias"]],
         "cyclic reference": [["- &anchor [*anchor]"]]
