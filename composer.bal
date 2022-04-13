@@ -9,9 +9,9 @@ class Composer {
 
     function isEndOfDocument(Event event) returns boolean => event is EndEvent && (event.endType == STREAM || event.endType == DOCUMENT);
 
-    public function composeDocument() returns anydata|ParsingError|LexicalError|ComposingError {
+    public function composeDocument(Event? eventParam = ()) returns anydata|ParsingError|LexicalError|ComposingError {
         // Obtain the root event
-        Event event = check self.parser.parse();
+        Event event = eventParam is () ? check self.parser.parse() : eventParam;
         if self.isEndOfDocument(event) {
             return ();
         }
@@ -29,8 +29,8 @@ class Composer {
         anydata[] output = [];
         Event event = check self.parser.parse();
 
-        while !(event is EndEvent && (event.endType == STREAM || event.endType == DOCUMENT)) {
-            output.push(check self.composeNode(event));
+        while !(event is EndEvent && event.endType == STREAM) {
+            output.push(check self.composeDocument(event));
             event = check self.parser.parse();
         }
 

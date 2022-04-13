@@ -53,3 +53,21 @@ function invalidEventStreamDataGen() returns map<[string[]]> {
         "cyclic reference": [["- &anchor [*anchor]"]]
     };
 }
+
+@test:Config {
+    dataProvider: streamDataGen
+}
+function testComposeMultipleDocuments(string[] lines, anydata[] expectedDocs) returns error? {
+    Parser parser = check new (lines);
+    Composer composer = new (parser);
+    anydata[] docs = check composer.composeStream();
+
+    test:assertEquals(docs, expectedDocs);
+
+}
+
+function streamDataGen() returns map<[string[], anydata[]]> {
+    return {
+        "multiple bare documents": [["first doc", "...", "second doc"], ["first doc", "second doc"]]
+    };
+}
