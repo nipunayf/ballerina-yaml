@@ -208,6 +208,7 @@ class Parser {
                 return {startType: SEQUENCE, flowStyle: true};
             }
             DOCUMENT_MARKER => {
+                self.lexer.resetState();
                 return {endType: DOCUMENT};
             }
             SEQUENCE_END => {
