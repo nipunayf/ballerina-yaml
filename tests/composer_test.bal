@@ -68,6 +68,7 @@ function testComposeMultipleDocuments(string[] lines, anydata[] expectedDocs) re
 
 function streamDataGen() returns map<[string[], anydata[]]> {
     return {
-        "multiple bare documents": [["first doc", "...", "second doc"], ["first doc", "second doc"]]
+        "multiple bare documents": [["first doc", "...", "second doc"], ["first doc", "second doc"]],
+        "hoping out from block collection": [["-", " - value", "...", "second doc"], [[["value"]], "second doc"]]
     };
 }
