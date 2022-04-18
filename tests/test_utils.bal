@@ -62,7 +62,7 @@ function getToken(Lexer lexer, int index) returns Token|error {
 }
 
 function assertParsingEvent(string|string[] lines, string value = "", string tag = "", string tagHandle = "", string anchor = "") returns error? {
-    Parser parser = check new Parser((lines is string) ? [lines] : lines);
+    Parser parser = check new ((lines is string) ? [lines] : lines);
     Event event = check parser.parse();
 
     if value.length() > 0 {
@@ -94,12 +94,12 @@ function assertEvent(Parser parser, Event assertingEvent) returns error? {
 # + eventNumber - Number of times to parse before the error is generated.
 # + return - An parsing error if the line is empty.
 function assertParsingError(string|string[] lines, boolean isLexical = false, int eventNumber = 1) returns error? {
-    Parser parser = check new Parser((lines is string) ? [lines] : lines);
+    Parser parser = check new ((lines is string) ? [lines] : lines);
 
     Event|error err;
 
     foreach int i in 1 ... eventNumber {
-        err = parser.parse();
+        err = parser.parse(docType = ANY_DOCUMENT);
     }
     
     if (isLexical) {

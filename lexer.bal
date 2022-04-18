@@ -1201,6 +1201,17 @@ class Lexer {
         return message.length() == 0 ? self.generateToken(successToken) : self.generateError(message);
     }
 
+    public function resetState() {
+        self.addIndent = 1;
+        self.captureIndent = false;
+        self.delimiterStartIndex = -1;
+        self.enforceMapping = false;
+        self.indent = -1;
+        self.indents = [];
+        self.lexeme = "";
+        self.state = LEXER_START;
+    }
+
     # Peeks the character succeeding after k indexes. 
     # Returns the character after k spots.
     #

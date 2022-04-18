@@ -4,6 +4,12 @@ public enum ParserOption {
     EXPECT_VALUE
 }
 
+public enum DocumentType {
+    ANY_DOCUMENT,
+    BARE_DOCUMENT,
+    DIRECTIVE_DOCUMENT
+}
+
 # Parses the TOML document using the lexer
 class Parser {
     # Properties for the TOML lines
@@ -25,7 +31,6 @@ class Parser {
     Lexer lexer = new ();
 
     # Flag is set if an empty node is possible to expect
-    private boolean expectEmptyNode = false;
     private boolean explicitKey = false;
 
     map<string> tagHandles = {};
@@ -45,7 +50,7 @@ class Parser {
     #
     # + option - To expect the next event to be a key
     # + return - Lexical or parsing error on failure
-    public function parse(ParserOption option = DEFAULT) returns Event|LexicalError|ParsingError {
+    public function parse(ParserOption option = DEFAULT, DocumentType docType = BARE_DOCUMENT) returns Event|LexicalError|ParsingError {
         // Empty the event buffer before getting new tokens
         if self.eventBuffer.length() > 0 {
             return self.eventBuffer.shift();
@@ -59,24 +64,29 @@ class Parser {
             check self.checkToken();
         }
 
-        match self.currentToken.token {
-            EOL|EMPTY_LINE => {
-                // if self.expectEmptyNode {
-                //     self.expectEmptyNode = false;
-                //     return {
-                //         value: ()
-                //     }
-                // }
-
-                if self.lineIndex >= self.numLines - 1 {
-                    return {
+        // Set the next line if the end of line is detected
+        if self.currentToken.token == EOL || self.currentToken.token == EMPTY_LINE {
+            if self.lineIndex >= self.numLines - 1 {
+                return {
                         endType: STREAM
                     };
-                }
-                check self.initLexer();
-                return self.parse();
             }
+            check self.initLexer();
+            return self.parse(docType = docType);
+        }
+
+        // Only directive tokens are allowed in directive document
+        if docType == DIRECTIVE_DOCUMENT && !(self.currentToken.token == DIRECTIVE || self.currentToken.token == DIRECTIVE_MARKER) {
+            return self.generateError(string `'${self.currentToken.token}' is not allowed in a directive document`);
+        }
+
+        match self.currentToken.token {
             DIRECTIVE => {
+                // Directives are not allowed in bare documents
+                if docType == BARE_DOCUMENT {
+                    return self.generateError("Directives are not allowed in a bare document");
+                }
+
                 if (self.currentToken.value == "YAML") { // YAML directive
                     check self.yamlDirective();
                     check self.checkToken([SEPARATION_IN_LINE, EOL]);
@@ -84,8 +94,7 @@ class Parser {
                     check self.tagDirective();
                     check self.checkToken([SEPARATION_IN_LINE, EOL]);
                 }
-                check self.initLexer();
-                return check self.parse();
+                return check self.parse(docType = DIRECTIVE_DOCUMENT);
             }
             DIRECTIVE_MARKER => {
                 return {
@@ -199,6 +208,7 @@ class Parser {
                 return {startType: SEQUENCE, flowStyle: true};
             }
             DOCUMENT_MARKER => {
+                self.lexer.resetState();
                 return {endType: DOCUMENT};
             }
             SEQUENCE_END => {

@@ -2,18 +2,45 @@ class Composer {
     Parser parser;
     private Event? buffer = ();
     private map<anydata> anchorBuffer = {};
+    private boolean docTerminated = false;
 
     function init(Parser parser) {
         self.parser = parser;
     }
 
-    public function compose() returns anydata[]|ParsingError|LexicalError|ComposingError {
+    function isEndOfDocument(Event event) returns boolean => event is EndEvent && (event.endType == STREAM || event.endType == DOCUMENT);
+
+    public function composeDocument(Event? eventParam = ()) returns anydata|ParsingError|LexicalError|ComposingError {
+        // Obtain the root event
+        Event event = eventParam is () ? check self.checkEvent() : eventParam;
+
+        // Return an empty document if end is reached
+        if self.isEndOfDocument(event) {
+            return ();
+        }
+
+        // TODO: Set up the hash map for tag handling
+        if event is DocumentStartEvent {
+            event = check self.checkEvent();
+        }
+
+        // Construct the single document
+        anydata output = check self.composeNode(event);
+
+        // Return an error if there is another root event
+        event = check self.checkEvent();
+        return self.isEndOfDocument(event) ? output
+            : self.generateError("There can only be one root event to a document");
+    }
+
+    public function composeStream() returns anydata[]|ParsingError|LexicalError|ComposingError {
         anydata[] output = [];
-        Event event = check self.parser.parse();
+        Event event = check self.checkEvent();
 
         while !(event is EndEvent && event.endType == STREAM) {
-            output.push(check self.composeNode(event));
-            event = check self.parser.parse();
+            output.push(check self.composeDocument(event));
+            self.docTerminated = false;
+            event = check self.checkEvent();
         }
 
         return output;
@@ -21,7 +48,7 @@ class Composer {
 
     private function composeSequence(boolean flowStyle) returns anydata[]|LexicalError|ParsingError|ComposingError {
         anydata[] sequence = [];
-        Event event = check self.parser.parse();
+        Event event = check self.checkEvent();
 
         while true {
             if event is EndEvent {
@@ -33,6 +60,7 @@ class Composer {
                         break;
                     }
                     DOCUMENT|STREAM => {
+                        self.docTerminated = event.endType == DOCUMENT;
                         if !flowStyle {
                             break;
                         }
@@ -49,7 +77,7 @@ class Composer {
             }
 
             sequence.push(check self.composeNode(event));
-            event = check self.parser.parse();
+            event = check self.checkEvent();
         }
 
         return sequence;
@@ -57,7 +85,7 @@ class Composer {
 
     private function composeMapping(boolean flowStyle) returns map<anydata>|LexicalError|ParsingError|ComposingError {
         map<anydata> structure = {};
-        Event event = check self.parser.parse(EXPECT_KEY);
+        Event event = check self.checkEvent(EXPECT_KEY);
 
         while true {
             if event is EndEvent {
@@ -69,6 +97,7 @@ class Composer {
                         return self.generateError("Expected a mapping end event");
                     }
                     DOCUMENT|STREAM => {
+                        self.docTerminated = event.endType == DOCUMENT;
                         if !flowStyle {
                             break;
                         }
@@ -89,11 +118,11 @@ class Composer {
             }
 
             anydata key = check self.composeNode(event);
-            event = check self.parser.parse(EXPECT_VALUE);
+            event = check self.checkEvent(EXPECT_VALUE);
             anydata value = check self.composeNode(event);
 
             structure[key.toString()] = value;
-            event = check self.parser.parse(EXPECT_KEY);
+            event = check self.checkEvent(EXPECT_KEY);
         }
 
         return structure;
@@ -101,7 +130,7 @@ class Composer {
 
     // TODO: Tag resolution for 
     // private function composeScalar() returns anydata|LexicalError|ParsingError|ComposingError {
-    //     Event event = check self.parser.parse();
+    //     Event event = check self.checkEvent();
 
     // }
 
@@ -144,6 +173,13 @@ class Composer {
             }
             self.anchorBuffer[<string>event.anchor] = assignedValue;
         }
+    }
+
+    private function checkEvent(ParserOption option = DEFAULT, DocumentType docType = BARE_DOCUMENT) returns Event|LexicalError|ParsingError {
+        if self.docTerminated {
+            return {endType: DOCUMENT};
+        }
+        return self.parser.parse(option, docType);
     }
 
     # Generates a Parsing Error Error.
