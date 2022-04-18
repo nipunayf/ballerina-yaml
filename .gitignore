@@ -1,5 +1,6 @@
 # Ballerina
 target
+main.bal
 
 # IDE Files
 .idea/
