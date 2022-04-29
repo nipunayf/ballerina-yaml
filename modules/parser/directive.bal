@@ -1,3 +1,4 @@
+import ballerina/log;
 import yaml.lexer;
 
 # Check the grammar productions for TAG directives.
@@ -15,15 +16,17 @@ function tagDirective(ParserState state) returns (lexer:LexicalError|ParsingErro
     string tagHandle = state.currentToken.value;
     check checkToken(state, lexer:SEPARATION_IN_LINE);
 
+    // Tag handles cannot be redefined
+    if (state.customTagHandles.hasKey(tagHandle)) {
+        return generateError(state, formateDuplicateErrorMessage(tagHandle));
+    }
+
     // Expect a tag prefix
     state.updateLexerContext(lexer:LEXER_TAG_PREFIX);
     check checkToken(state, lexer:TAG_PREFIX);
     string tagPrefix = state.currentToken.value;
 
-    if (state.tagHandles.hasKey(tagHandle)) {
-        return generateError(state, formateDuplicateErrorMessage(tagHandle));
-    }
-    state.tagHandles[tagHandle] = tagPrefix;
+    state.customTagHandles[tagHandle] = tagPrefix;
 }
 
 # Check the grammar productions for YAML directives.
@@ -32,6 +35,11 @@ function tagDirective(ParserState state) returns (lexer:LexicalError|ParsingErro
 # + state - Current parser state
 # + return - An error on mismatch.
 function yamlDirective(ParserState state) returns lexer:LexicalError|ParsingError|() {
+    // Returns an error if the document version is already defined.
+    if state.yamlVersion != () {
+        return generateError(state, formateDuplicateErrorMessage("%YAML"));
+    }
+
     // Expect a separate in line.
     check checkToken(state, lexer:SEPARATION_IN_LINE);
     state.updateLexerContext(lexer:LEXER_DIRECTIVE);
@@ -44,11 +52,13 @@ function yamlDirective(ParserState state) returns lexer:LexicalError|ParsingErro
     check checkToken(state, lexer:DECIMAL);
     lexemeBuffer += state.currentToken.value;
 
-    // Update the version
-    if (state.yamlVersion is null) {
-        state.yamlVersion = lexemeBuffer;
-        return;
+    // The parser only works with versions that is compatible with the major version of the parser.
+    float yamlVersion = <float>(check processTypeCastingError(state, 'float:fromString(lexemeBuffer)));
+    if yamlVersion != 1.2 {
+        if yamlVersion >= 2.0 || yamlVersion < 1.0 {
+            return generateError(state, string `Incompatible version ${yamlVersion} for the 1.2 parser`);
+        }
+        log:printWarn(string `The parser is designed for YAML 1.2. Some features may not work with ${yamlVersion}`);
     }
-
-    return generateError(state, formateDuplicateErrorMessage("%YAML"));
+    state.yamlVersion = yamlVersion;
 }

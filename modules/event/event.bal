@@ -1,4 +1,4 @@
-public type Event AliasEvent|ScalarEvent|DocumentStartEvent|StartEvent|EndEvent;
+public type Event AliasEvent|ScalarEvent|StartEvent|EndEvent;
 
 public type AliasEvent record {|
     string alias;
@@ -7,7 +7,6 @@ public type AliasEvent record {|
 public type NodeEvent record {|
     string? anchor = ();
     string? tag = ();
-    string? tagHandle  = ();
 |};
 
 public type ScalarEvent record {|
@@ -15,16 +14,10 @@ public type ScalarEvent record {|
     string? value;
 |};
 
-public type DocumentStartEvent record {|
-    boolean explicit = false;
-    string docVersion;
-    map<string> tags;
-|};
-
 public type StartEvent record {|
+    *NodeEvent;
     Collection startType;
     boolean flowStyle = false;
-    *NodeEvent;
 |};
 
 public type EndEvent record {|
