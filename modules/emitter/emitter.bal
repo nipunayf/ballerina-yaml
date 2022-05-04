@@ -1,13 +1,18 @@
+import yaml.schema;
 import yaml.event;
 
 # Represents the variables of the Emitter state.
 #
-# + output - Lines to be written.
+# + output - Lines to be written.  
 # + indent - Total whitespace for a single indent  
+# + canonical - If set, the tag is written explicitly along with the value.
+# + tagSchema - Custom tags for the YAML parser  
 # + events - Event tree to be written
-public type EmitterState record {|
+type EmitterState record {|
     string[] output;
     readonly string indent;
+    readonly boolean canonical;
+    readonly & map<schema:YAMLTypeConstructor> tagSchema;
     event:Event[] events;
 |};
 
@@ -15,9 +20,16 @@ public type EmitterState record {|
 #
 # + events - Event tree to be converted  
 # + indentationPolicy - Number of whitespace for an indent  
-# + isStream - Whether the event tree is a stream
+# + canonical - If set, the tag is written explicitly along with the value.
+# + tagSchema - Custom tags for the YAML parser
+# + isStream - Whether the event tree is a stream  
 # + return - YAML string lines
-public function emit(event:Event[] events, int indentationPolicy, boolean isStream = false) returns string[]|EmittingError {
+public function emit(event:Event[] events,
+    int indentationPolicy,
+    boolean canonical,
+    readonly & map<schema:YAMLTypeConstructor> tagSchema,
+    boolean isStream) returns string[]|EmittingError {
+
     // Setup the total whitespace for an indentation
     string indent = "";
     foreach int i in 1 ... indentationPolicy {
@@ -27,11 +39,16 @@ public function emit(event:Event[] events, int indentationPolicy, boolean isStre
     EmitterState state = {
         output: [],
         indent,
+        canonical,
+        tagSchema,
         events
     };
 
     if isStream { // Write YAML stream
-        // TODO: Write YAML streams
+        while state.events.length() > 0 {
+            check write(state);
+            state.output.push("...");    
+        }
     } else { // Write a single YAML document
         check write(state);
         if state.events.length() > 0 {
@@ -52,9 +69,9 @@ function write(EmitterState state) returns EmittingError? {
     // Convert sequence collection
     if event is event:StartEvent && event.startType == event:SEQUENCE {
         if event.flowStyle {
-            state.output.push(check writeFlowSequence(state));
+            state.output.push(check writeFlowSequence(state, event.tag));
         } else {
-            check writeBlockSequence(state, "");
+            check writeBlockSequence(state, "", event.tag);
         }
         return;
     }
@@ -62,27 +79,16 @@ function write(EmitterState state) returns EmittingError? {
     // Convert mapping collection
     if event is event:StartEvent && event.startType == event:MAPPING {
         if event.flowStyle {
-            state.output.push(check writeFlowMapping(state));
+            state.output.push(check writeFlowMapping(state, event.tag));
         } else {
-            check writeBlockMapping(state, "");
+            check writeBlockMapping(state, "", event.tag);
         }
         return;
     }
 
     // Convert scalar 
     if event is event:ScalarEvent {
-        state.output.push(event.value == () ? "" : event.value.toString());
+        state.output.push(writeNode(state, event.value, event.tag));
         return;
     }
-}
-
-# Obtain the topmost event from the event tree.
-#
-# + state - Current emitter state
-# + return - The topmost event from the current tree.
-function getEvent(EmitterState state) returns event:Event {
-    if state.events.length() < 1 {
-        return {endType: event:STREAM};
-    }
-    return state.events.shift();
 }

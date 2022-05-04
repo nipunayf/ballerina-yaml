@@ -1,5 +1,6 @@
 import yaml.lexer;
 import yaml.event;
+import yaml.schema;
 
 # Generates an event my combining to map<json> objects.
 #
@@ -149,15 +150,21 @@ function verifyKey(ParserState state, boolean isSingleLine) returns lexer:Lexica
     }
 }
 
+# Convert the shorthand tag to the complete tag by mapping the tag handle.
+#
+# + state - Current parser state
+# + tagHandle - Tag handle of the event  
+# + tagPrefix - Tag prefix of the event
+# + return - The complete tag name of the event
 function generateCompleteTagName(ParserState state, string tagHandle, string tagPrefix) returns string|ParsingError {
     string tagHandleName;
 
-    // Check if the tag handle is defined in the map
+    // Check if the tag handle is defined in the custom tags.
     if state.customTagHandles.hasKey(tagHandle) {
         tagHandleName = state.customTagHandles.get(tagHandle);
-    } else {
-        if state.defaultTagHandles.hasKey(tagHandle) {
-            tagHandleName = state.defaultTagHandles.get(tagHandle);
+    } else { // Else, check if the tag handle is in the default tags.
+        if schema:defaultTagHandles.hasKey(tagHandle) {
+            tagHandleName = schema:defaultTagHandles.get(tagHandle);
         }
         else {
             return generateError(state, string `'${tagHandle}' tag handle is not defined`);
