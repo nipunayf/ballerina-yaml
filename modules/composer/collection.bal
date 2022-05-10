@@ -1,4 +1,4 @@
-import yaml.event;
+import yaml.common;
 import yaml.parser;
 import yaml.lexer;
 import yaml.schema;
@@ -8,35 +8,28 @@ import yaml.schema;
 # + state - Current composer state
 # + flowStyle - If a collection is flow sequence
 # + return - Constructed Ballerina array on success
-function composeSequence(ComposerState state, boolean flowStyle) returns json[]|lexer:LexicalError|parser:ParsingError|ComposingError|schema:TypeError {
+function composeSequence(ComposerState state, boolean flowStyle) returns json[]|lexer:LexicalError|parser:ParsingError|ComposingError|schema:SchemaError {
     json[] sequence = [];
-    event:Event event = check checkEvent(state);
+    common:Event event = check checkEvent(state);
 
     // Iterate until the end event is detected
     while true {
-        if event is event:EndEvent {
+        if event is common:EndEvent {
             match event.endType {
-                event:MAPPING => {
-                    return generateError(state, "Expected a sequence end event");
+                common:MAPPING => {
+                    return generateExpectedEndEventError(state, event, {endType: common:SEQUENCE});
                 }
-                event:SEQUENCE => {
+                common:SEQUENCE => {
                     break;
                 }
-                event:DOCUMENT|event:STREAM => {
-                    state.docTerminated = event.endType == event:DOCUMENT;
+                common:DOCUMENT|common:STREAM => {
+                    state.docTerminated = event.endType == common:DOCUMENT;
                     if !flowStyle {
                         break;
                     }
-                    return generateError(state, "Expected a sequence end event");
+                    return generateExpectedEndEventError(state, event, {endType: common:SEQUENCE});
                 }
             }
-        }
-
-        if event is event:StartEvent && event.startType == event:DOCUMENT {
-            if !flowStyle {
-                break;
-            }
-            return generateError(state, "Expected a sequence end event");
         }
 
         sequence.push(check composeNode(state, event));
@@ -51,39 +44,32 @@ function composeSequence(ComposerState state, boolean flowStyle) returns json[]|
 # + state - Current composer state
 # + flowStyle - If a collection is flow mapping
 # + return - Constructed Ballerina array on success
-function composeMapping(ComposerState state, boolean flowStyle) returns map<json>|lexer:LexicalError|parser:ParsingError|ComposingError|schema:TypeError {
+function composeMapping(ComposerState state, boolean flowStyle) returns map<json>|lexer:LexicalError|parser:ParsingError|ComposingError|schema:SchemaError {
     map<json> structure = {};
-    event:Event event = check checkEvent(state, parser:EXPECT_KEY);
+    common:Event event = check checkEvent(state, parser:EXPECT_KEY);
 
     // Iterate until an end event is detected
     while true {
-        if event is event:EndEvent {
+        if event is common:EndEvent {
             match event.endType {
-                event:MAPPING => {
+                common:MAPPING => {
                     break;
                 }
-                event:SEQUENCE => {
-                    return generateError(state, "Expected a mapping end event");
+                common:SEQUENCE => {
+                    return generateExpectedEndEventError(state, event, {endType: common:MAPPING});
                 }
-                event:DOCUMENT|event:STREAM => {
-                    state.docTerminated = event.endType == event:DOCUMENT;
+                common:DOCUMENT|common:STREAM => {
+                    state.docTerminated = event.endType == common:DOCUMENT;
                     if !flowStyle {
                         break;
                     }
-                    return generateError(state, "Expected a mapping end event");
+                    return generateExpectedEndEventError(state, event, {endType: common:MAPPING});
                 }
             }
         }
 
-        if event is event:StartEvent && event.startType == event:DOCUMENT {
-            if !flowStyle {
-                break;
-            }
-            return generateError(state, "Expected a sequence end event");
-        }
-
-        if !(event is event:StartEvent|event:ScalarEvent) {
-            return generateError(state, "Expected a key for a mapping");
+        if !(event is common:StartEvent|common:ScalarEvent) {
+            return generateComposeError(state, "Expected either a start event or a scalar as a key", event);
         }
 
         // Compose the key

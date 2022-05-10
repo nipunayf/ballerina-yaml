@@ -8,12 +8,22 @@ import yaml.composer;
 # + filePath - Path to the YAML file  
 # + config - Configurations for reading a YAML file  
 # + isStream - If set, the parser reads a stream of YAML documents
-# + return - The ballerina data structure o success.
-public function read(string filePath, ReadConfig config = {}, boolean isStream = false) returns json|error {
+# + return - The ballerina data structure on success.
+public function read(string filePath, ReadConfig config = {}, boolean isStream = false) returns json|Error {
     string[] lines = check io:fileReadLines(filePath);
     composer:ComposerState composerState = check new (lines, generateTagHandlesMap(config.yamlTypes, config.schema));
 
     return isStream ? composer:composeStream(composerState) : composer:composeDocument(composerState);
+}
+
+# Parses single YAML string line to Ballerina data structures.
+#
+# + yamlString - Single YAML line string to be parsed
+# + config - Configurations for reading a YAML file  
+# + return - The ballerina data structure on success.
+public function readString(string yamlString, ReadConfig config = {}) returns json|Error {
+    composer:ComposerState composerState = check new([yamlString],generateTagHandlesMap(config.yamlTypes, config.schema));
+    return composer:composeDocument(composerState);
 }
 
 # Write a single YAML document into a file.
@@ -23,7 +33,7 @@ public function read(string filePath, ReadConfig config = {}, boolean isStream =
 # + config - Configurations for writing a YAML file  
 # + isStream - If set, the parser will write a stream of YAML documents
 # + return - An error on failure
-public function write(string fileName, json yamlDoc, WriteConfig config = {}, boolean isStream = false) returns error? {
+public function write(string fileName, json yamlDoc, WriteConfig config = {}, boolean isStream = false) returns Error? {
     check openFile(fileName);
 
     // Obtain the content for the YAML file

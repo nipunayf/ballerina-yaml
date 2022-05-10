@@ -1,4 +1,5 @@
 import ballerina/log;
+import yaml.common;
 import yaml.lexer;
 
 # Check the grammar productions for TAG directives.
@@ -6,7 +7,7 @@ import yaml.lexer;
 #
 # + state - Current parser state
 # + return - An error on mismatch.
-function tagDirective(ParserState state) returns (lexer:LexicalError|ParsingError)? {
+function tagDirective(ParserState state) returns (ParsingError)? {
     // Expect a separate in line
     check checkToken(state, lexer:SEPARATION_IN_LINE);
 
@@ -18,7 +19,7 @@ function tagDirective(ParserState state) returns (lexer:LexicalError|ParsingErro
 
     // Tag handles cannot be redefined
     if (state.customTagHandles.hasKey(tagHandle)) {
-        return generateError(state, formateDuplicateErrorMessage(tagHandle));
+        return generateDuplicateError(state, tagHandle);
     }
 
     // Expect a tag prefix
@@ -34,10 +35,10 @@ function tagDirective(ParserState state) returns (lexer:LexicalError|ParsingErro
 #
 # + state - Current parser state
 # + return - An error on mismatch.
-function yamlDirective(ParserState state) returns lexer:LexicalError|ParsingError|() {
+function yamlDirective(ParserState state) returns ParsingError|() {
     // Returns an error if the document version is already defined.
     if state.yamlVersion != () {
-        return generateError(state, formateDuplicateErrorMessage("%YAML"));
+        return generateDuplicateError(state, "%YAML");
     }
 
     // Expect a separate in line.
@@ -53,10 +54,10 @@ function yamlDirective(ParserState state) returns lexer:LexicalError|ParsingErro
     lexemeBuffer += state.currentToken.value;
 
     // The parser only works with versions that is compatible with the major version of the parser.
-    float yamlVersion = <float>(check processTypeCastingError(state, 'float:fromString(lexemeBuffer)));
+    float yamlVersion = <float>(check common:processTypeCastingError('float:fromString(lexemeBuffer)));
     if yamlVersion != 1.2 {
         if yamlVersion >= 2.0 || yamlVersion < 1.0 {
-            return generateError(state, string `Incompatible version ${yamlVersion} for the 1.2 parser`);
+            return generateGrammarError(state, string `Incompatible version ${yamlVersion} for the 1.2 parser`);
         }
         log:printWarn(string `The parser is designed for YAML 1.2. Some features may not work with ${yamlVersion}`);
     }

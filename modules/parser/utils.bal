@@ -1,5 +1,5 @@
 import yaml.lexer;
-import yaml.event;
+import yaml.common;
 import yaml.schema;
 
 # Generates an event my combining to map<json> objects.
@@ -8,7 +8,7 @@ import yaml.schema;
 # + m1 - The first map structure
 # + m2 - The second map structure
 # + return - The constructed event after combined.
-function constructEvent(ParserState state, map<json> m1, map<json>? m2 = ()) returns event:Event|ParsingError {
+function constructEvent(ParserState state, map<json> m1, map<json>? m2 = ()) returns common:Event|ParsingError {
     map<json> returnMap = m1.clone();
 
     if m2 != () {
@@ -17,9 +17,9 @@ function constructEvent(ParserState state, map<json> m1, map<json>? m2 = ()) ret
         });
     }
 
-    error|event:Event processedMap = returnMap.cloneWithType(event:Event);
+    error|common:Event processedMap = returnMap.cloneWithType(common:Event);
 
-    return processedMap is event:Event ? processedMap : generateError(state, 'error:message(processedMap));
+    return processedMap is common:Event ? processedMap : common:generateConversionError('error:message(processedMap));
 }
 
 # Trims the trailing whitespace of a string.
@@ -74,7 +74,7 @@ function trimHeadWhitespace(string value) returns string {
 # + customMessage - Error message to be displayed if the expected token not found  
 # + peek - Stores the token in the buffer
 # + return - Parsing error if not found
-function checkToken(ParserState state, lexer:YAMLToken|lexer:YAMLToken[] expectedTokens = lexer:DUMMY, string customMessage = "", boolean peek = false) returns (lexer:LexicalError|ParsingError)? {
+function checkToken(ParserState state, lexer:YAMLToken|lexer:YAMLToken[] expectedTokens = lexer:DUMMY, string customMessage = "", boolean peek = false) returns (ParsingError)? {
     lexer:Token token;
 
     // Obtain a token form the lexer if there is none in the buffer.
@@ -99,36 +99,21 @@ function checkToken(ParserState state, lexer:YAMLToken|lexer:YAMLToken[] expecte
         return;
     }
 
-    // Automatically generates a template error message if there is no custom message.
-    string errorMessage = customMessage.length() == 0
-                                ? formatExpectErrorMessage(state.currentToken.token, expectedTokens, state.prevToken)
-                                : customMessage;
-
     // Generate an error if the expected token differ from the actual token.
+    // Automatically generates a template error message if there is no custom message.
     if (expectedTokens is lexer:YAMLToken) {
         if (token.token != expectedTokens) {
-            return generateError(state, errorMessage);
+            return customMessage.length() == 0 
+                ? generateExpectError(state, expectedTokens, state.prevToken) 
+                : generateGrammarError(state, customMessage);
         }
     } else {
         if (expectedTokens.indexOf(token.token) == ()) {
-            return generateError(state, errorMessage);
+            return customMessage.length() == 0 
+                ? generateExpectError(state, expectedTokens, state.prevToken) 
+                : generateGrammarError(state, customMessage);
         }
     }
-}
-
-# Check errors during type casting to Ballerina types.
-#
-# + state - Current parser state
-# + value - Value to be type casted.
-# + return - Value as a Ballerina data type  
-function processTypeCastingError(ParserState state, json|error value) returns json|ParsingError {
-    // Check if the type casting has any errors
-    if value is error {
-        return generateError(state, "Invalid value for assignment");
-    }
-
-    // Returns the value on success
-    return value;
 }
 
 # Check if the given key adheres to either a explicit or a implicit key.
@@ -136,7 +121,7 @@ function processTypeCastingError(ParserState state, json|error value) returns js
 # + state - Current parser state  
 # + isSingleLine - If the scalar only spanned for one line.
 # + return - An error on invalid key.
-function verifyKey(ParserState state, boolean isSingleLine) returns lexer:LexicalError|ParsingError|() {
+function verifyKey(ParserState state, boolean isSingleLine) returns ParsingError|() {
     // Explicit keys can span multiple lines. 
     if state.explicitKey {
         return;
@@ -146,7 +131,7 @@ function verifyKey(ParserState state, boolean isSingleLine) returns lexer:Lexica
     state.updateLexerContext(lexer:LEXER_START);
     check checkToken(state, peek = true);
     if state.tokenBuffer.token == lexer:MAPPING_VALUE && !isSingleLine {
-        return generateError(state, "Single-quoted keys cannot span multiple lines");
+        return generateGrammarError(state, "Single-quoted keys cannot span multiple lines");
     }
 }
 
@@ -167,7 +152,7 @@ function generateCompleteTagName(ParserState state, string tagHandle, string tag
             tagHandleName = schema:defaultTagHandles.get(tagHandle);
         }
         else {
-            return generateError(state, string `'${tagHandle}' tag handle is not defined`);
+            return generateAliasingError(state, string `'${tagHandle}' tag handle is not defined`);
         }
     }
 

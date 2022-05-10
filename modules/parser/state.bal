@@ -1,5 +1,5 @@
 import yaml.lexer;
-import yaml.event;
+import yaml.common;
 
 public class ParserState {
     # Properties for the TOML lines
@@ -27,7 +27,7 @@ public class ParserState {
     # YAML version of the document.
     float? yamlVersion = ();
 
-    event:Event[] eventBuffer = [];
+    common:Event[] eventBuffer = [];
 
     public function init(string[] lines) returns ParsingError? {
         self.lines = lines;
@@ -50,7 +50,7 @@ public class ParserState {
     function initLexer(string message = "Unexpected end of stream") returns ParsingError? {
         self.lineIndex += 1;
         if (self.lineIndex >= self.numLines) {
-            return generateError(self, message);
+            return generateGrammarError(self, message);
         }
         self.lexerState.line = self.lines[self.lineIndex];
         self.lexerState.index = 0;

@@ -4,7 +4,7 @@ import yaml.lexer;
 #
 # + state - Current parser state
 # + return - Parsed double-quoted scalar value
-function doubleQuoteScalar(ParserState state) returns lexer:LexicalError|ParsingError|string {
+function doubleQuoteScalar(ParserState state) returns ParsingError|string {
     state.updateLexerContext(lexer:LEXER_DOUBLE_QUOTE);
     string lexemeBuffer = "";
     boolean isFirstLine = true;
@@ -59,10 +59,10 @@ function doubleQuoteScalar(ParserState state) returns lexer:LexicalError|Parsing
                     lexemeBuffer += "\n";
                 }
                 emptyLine = true;
-                check state.initLexer("Expected to end the multi-line double quoted scalar");
+                check state.initLexer("Expected to end the multi-line double-quoted scalar");
             }
             _ => {
-                return generateError(state, string `Invalid character '${state.currentToken.token}' inside the double quote`);
+                return generateInvalidTokenError(state, "double-quoted scalar");
             }
         }
         check checkToken(state);
@@ -76,7 +76,7 @@ function doubleQuoteScalar(ParserState state) returns lexer:LexicalError|Parsing
 #
 # + state - Current parser state
 # + return - Parsed single-quoted scalar value
-function singleQuoteScalar(ParserState state) returns ParsingError|lexer:LexicalError|string {
+function singleQuoteScalar(ParserState state) returns ParsingError|string {
     state.updateLexerContext(lexer:LEXER_SINGLE_QUOTE);
     string lexemeBuffer = "";
     boolean isFirstLine = true;
@@ -116,10 +116,10 @@ function singleQuoteScalar(ParserState state) returns ParsingError|lexer:Lexical
                     lexemeBuffer += "\n";
                 }
                 emptyLine = true;
-                check state.initLexer("Expected to end the multi-line double quoted scalar");
+                check state.initLexer("Expected to end the multi-line single-quoted scalar");
             }
             _ => {
-                return generateError(state, "Expected to end the multi-line single quoted scalar");
+                return generateInvalidTokenError(state, "single-quoted scalar");
             }
         }
         check checkToken(state);
@@ -133,7 +133,7 @@ function singleQuoteScalar(ParserState state) returns ParsingError|lexer:Lexical
 #
 # + state - Current parser state
 # + return - Parsed planar scalar value
-function planarScalar(ParserState state) returns ParsingError|lexer:LexicalError|string {
+function planarScalar(ParserState state) returns ParsingError|string {
     // Process the first planar char
     string lexemeBuffer = state.currentToken.value;
     boolean emptyLine = false;
@@ -200,7 +200,7 @@ function planarScalar(ParserState state) returns ParsingError|lexer:LexicalError
 # + state - Current parser state  
 # + isFolded - If set, then the parses folded block scalar. Else, parses literal block scalar.
 # + return - Parsed block scalar value
-function blockScalar(ParserState state, boolean isFolded) returns ParsingError|lexer:LexicalError|string {
+function blockScalar(ParserState state, boolean isFolded) returns ParsingError|string {
     string chompingIndicator = "";
     state.updateLexerContext(lexer:LEXER_BLOCK_HEADER);
     check checkToken(state);
@@ -217,7 +217,7 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|l
             chompingIndicator = "=";
         }
         _ => { // Any other characters are not allowed
-            return generateError(state, formatExpectErrorMessage(state.currentToken.token, lexer:CHOMPING_INDICATOR, state.prevToken));
+            return generateExpectError(state, lexer:CHOMPING_INDICATOR, state.prevToken);
         }
     }
 
