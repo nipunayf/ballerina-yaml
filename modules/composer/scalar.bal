@@ -23,6 +23,12 @@ function composeNode(ComposerState state, common:Event event) returns json|lexer
         return;
     }
 
+    // Ignore document markers
+    if event is common:DocumentMarkerEvent {
+        state.terminatedDocEvent = event;
+        return;
+    }
+
     // Check for collections
     if event is common:StartEvent {
         output = {};
@@ -31,7 +37,7 @@ function composeNode(ComposerState state, common:Event event) returns json|lexer
                 output = check castData(state, check composeSequence(state, event.flowStyle), schema:SEQUENCE, event.tag);
             }
             common:MAPPING => {
-                output = check castData(state, check composeMapping(state, event.flowStyle), schema:MAPPING, event.tag);
+                output = check castData(state, check composeMapping(state, event.flowStyle, event.implicit), schema:MAPPING, event.tag);
             }
             _ => {
                 return generateComposeError(state, "Only sequence and mapping are allowed as node start events", event);
@@ -55,9 +61,9 @@ function composeNode(ComposerState state, common:Event event) returns json|lexer
 # + return - An error on failure
 function checkAnchor(ComposerState state, common:StartEvent|common:ScalarEvent event, json assignedValue) returns ComposingError? {
     if event.anchor != () {
-        if state.anchorBuffer.hasKey(<string>event.anchor) {
-            return generateAliasingError(state, string `Duplicate anchor definition of '${<string>event.anchor}'`, event);
-        }
+        // if state.anchorBuffer.hasKey(<string>event.anchor) {
+        //     return generateAliasingError(state, string `Duplicate anchor definition of '${<string>event.anchor}'`, event);
+        // }
         state.anchorBuffer[<string>event.anchor] = assignedValue;
     }
 }
@@ -73,15 +79,32 @@ function castData(ComposerState state, json data,
     schema:FailSafeSchema kind, string? tag) returns json|ComposingError|schema:SchemaError {
     // Check for explicit keys 
     if tag != () {
+        // Check for the tags in the YAML core schema
+        if tag == schema:defaultGlobalTagHandle + "str" {
+            return kind == schema:STRING
+                ? data
+                : generateExpectedKindError(state, kind, schema:STRING, tag);
+        }
+
+        if tag == schema:defaultGlobalTagHandle + "seq" {
+            return kind == schema:SEQUENCE
+                ? data
+                : generateExpectedKindError(state, kind, schema:SEQUENCE, tag);
+        }
+
+        if tag == schema:defaultGlobalTagHandle + "map" {
+            return kind == schema:MAPPING
+                ? data
+                : generateExpectedKindError(state, kind, schema:MAPPING, tag);
+        }
+
         if !state.tagSchema.hasKey(tag) {
             return generateComposeError(state, string `There is no tag schema for '${tag}'`, data);
         }
         schema:YAMLTypeConstructor typeConstructor = state.tagSchema.get(tag);
 
         if kind != typeConstructor.kind {
-            return generateComposeError(state,
-                string `Expected '${typeConstructor.kind}' kind for the '${tag}' tag but found '${kind}'`,
-                data);
+            return generateExpectedKindError(state, kind, typeConstructor.kind, tag);
         }
 
         return typeConstructor.construct(data);

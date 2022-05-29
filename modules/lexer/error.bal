@@ -13,11 +13,11 @@ public type ScanningError distinct error<common:ReadErrorDetails>;
 # + context - Context of the lexeme being scanned
 # + return - Generated error message
 function generateInvalidCharacterError(LexerState state, string context) returns ScanningError {
-    string:Char currentChar = <string:Char>state.peek();
-    string message = string `Invalid character '${currentChar}' for a '${context}'.`;
+    string? currentChar = state.peek();
+    string message = string `Invalid character '${currentChar ?: "<end-of-line>"}' for a '${context}'.`;
     return error(
         message,
-        line = state.lineNumber,
+        line = state.lineNumber + 1,
         column = state.index,
         actual = currentChar
     );
@@ -26,7 +26,7 @@ function generateInvalidCharacterError(LexerState state, string context) returns
 function generateScanningError(LexerState state, string message) returns ScanningError =>
     error(
         message + ".",
-        line = state.lineNumber,
+        line = state.lineNumber + 1,
         column = state.index,
         actual = state.peek()
     );
@@ -34,7 +34,7 @@ function generateScanningError(LexerState state, string message) returns Scannin
 function generateIndentationError(LexerState state, string message) returns common:IndentationError =>
     error(
         message + ".",
-        line = state.lineNumber,
+        line = state.lineNumber + 1,
         column = state.index,
         actual = state.peek()
     );

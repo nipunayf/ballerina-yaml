@@ -7,7 +7,7 @@ function scanEscapedCharacter(LexerState state) returns LexicalError? {
     string currentChar;
 
     // Process double escape character
-    if (state.peek() == ()) {
+    if state.peek() == () {
         state.lexeme += "\\";
         return;
     } else {
@@ -15,7 +15,7 @@ function scanEscapedCharacter(LexerState state) returns LexicalError? {
     }
 
     // Check for predefined escape characters
-    if (escapedCharMap.hasKey(currentChar)) {
+    if escapedCharMap.hasKey(currentChar) {
         state.lexeme += <string>escapedCharMap[currentChar];
         return;
     }
@@ -90,9 +90,10 @@ function scanDoubleQuoteChar(LexerState state) returns boolean|LexicalError {
     }
 
     // Process escaped characters
-    if (state.peek() == "\\") {
+    if state.peek() == "\\" {
         state.forward();
         check scanEscapedCharacter(state);
+        state.lastEscapedChar = state.lexeme.length() - 1;
         return false;
     }
 
@@ -136,7 +137,7 @@ function scanPlanarChar(LexerState state) returns boolean|LexicalError {
     // Store the whitespace before a ns-planar char
     string whitespace = "";
     int numWhitespace = 0;
-    while state.peek() == "\t" || state.peek() == " " {
+    while isWhitespace(state) {
         whitespace += <string>state.peek();
         numWhitespace += 1;
         state.forward();
@@ -161,7 +162,7 @@ function scanPlanarChar(LexerState state) returns boolean|LexicalError {
 
     // Check for comments with a space before it
     if state.peek() == "#" {
-        if state.peek(-1) == " " {
+        if state.peek(-1) == " " || state.peek(-1) == "\t" {
             state.forward(-numWhitespace);
             return true;
         }
@@ -171,7 +172,7 @@ function scanPlanarChar(LexerState state) returns boolean|LexicalError {
 
     // Check for mapping value with a space after it 
     if state.peek() == ":" {
-        if !matchRegexPattern(state, [PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1) {
+        if !discernPlanarFromIndicator(state) {
             state.forward(-numWhitespace);
             return true;
         }
@@ -205,6 +206,19 @@ function scanPrintableChar(LexerState state) returns boolean|LexicalError {
     return true;
 }
 
+# Process ns-char values
+#
+# + state - Current lexer state
+# + return - False to continue. True to terminate the token. An error on failure.
+function scanNoSpacePrintableChar(LexerState state) returns boolean|LexicalError {
+    if matchRegexPattern(state, PRINTABLE_PATTERN, [BOM_PATTERN, LINE_BREAK_PATTERN, WHITESPACE_PATTERN]) {
+        state.lexeme += <string>state.peek();
+        return false;
+    }
+
+    return true;
+}
+
 # Scan the lexeme for tag characters.
 #
 # + state - Current lexer state
@@ -226,6 +240,11 @@ function scanTagCharacter(LexerState state) returns boolean|LexicalError {
         return false;
     }
 
+    // Check for separator in flow style collections.
+    if state.peek() == "," {
+        return true;
+    }
+
     return generateInvalidCharacterError(state, TAG);
 }
 
@@ -236,7 +255,7 @@ function scanTagCharacter(LexerState state) returns boolean|LexicalError {
 function scanURICharacter(boolean isVerbatim = false) returns function (LexerState state) returns boolean|LexicalError {
     return function(LexerState state) returns boolean|LexicalError {
         // Check for URI characters
-        if (matchRegexPattern(state, [URI_CHAR_PATTERN, WORD_PATTERN])) {
+        if matchRegexPattern(state, [URI_CHAR_PATTERN, WORD_PATTERN]) {
             state.lexeme += <string>state.peek();
             return false;
         }
@@ -268,7 +287,7 @@ function scanURICharacter(boolean isVerbatim = false) returns function (LexerSta
 function scanTagHandle(boolean differentiate = false) returns function (LexerState state) returns boolean|LexicalError {
     return function(LexerState state) returns boolean|LexicalError {
         // Scan the word of the name tag.
-        if (matchRegexPattern(state, WORD_PATTERN)) {
+        if matchRegexPattern(state, WORD_PATTERN) {
             state.lexeme += <string>state.peek();
             // Store the complete primary tag if another '!' cannot be detected.
             if differentiate && state.peek(1) == () {
@@ -319,7 +338,7 @@ function scanTagHandle(boolean differentiate = false) returns function (LexerSta
 # + state - Current lexer state
 # + return - False to continue. True to terminate the token. An error on failure.
 function scanAnchorName(LexerState state) returns boolean|LexicalError {
-    if (matchRegexPattern(state, [PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN])) {
+    if matchRegexPattern(state, [PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, FLOW_INDICATOR_PATTERN, WHITESPACE_PATTERN]) {
         state.lexeme += <string>state.peek();
         return false;
     }
@@ -332,24 +351,46 @@ function scanAnchorName(LexerState state) returns boolean|LexicalError {
 # + return - False to continue. True to terminate the token.
 function scanWhitespace(LexerState state) returns boolean {
     if state.peek() == " " {
-        state.lexeme += " ";
+        return false;
+    }
+    if state.peek() == "\t" {
+        state.updateFirstTabIndex();
         return false;
     }
     return true;
 }
 
+function scanWS(LexerState state) returns string {
+    string whitespace = "";
+
+    while state.index < state.line.length() {
+        if state.peek() == " " {
+            whitespace += " ";
+        } else if state.peek() == "\t" {
+            state.updateFirstTabIndex();
+            whitespace += "\t";
+        } else {
+            break;
+        }
+        state.forward();
+    }
+
+    return whitespace;
+}
+
 # Check for the lexemes to crete an DECIMAL token.
 #
-# + digitPattern - Regex pattern of the number system
-# + return - Generates a function which checks the lexemes for the given number system.  
-function scanDigit(string digitPattern) returns function (LexerState state) returns boolean|LexicalError {
-    return function(LexerState state) returns boolean|LexicalError {
-        if (matchRegexPattern(state, digitPattern)) {
-            state.lexeme += <string>state.peek();
-            return false;
-        }
+# + state - Current lexer state
+# + return - Generates a function which checks the lexemes for the given number system.
+function scanDigit(LexerState state) returns boolean|LexicalError {
+    if matchRegexPattern(state, DECIMAL_DIGIT_PATTERN) {
+        state.lexeme += <string>state.peek();
+        return false;
+    }
+    if isWhitespace(state) || state.peek() == "." {
         return true;
-    };
+    }
+    return generateInvalidCharacterError(state, "Digit");
 }
 
 # Differentiate the planar and anchor keys against the key of a mapping.
@@ -359,11 +400,13 @@ function scanDigit(string digitPattern) returns function (LexerState state) retu
 # + process - Function to scan the lexeme
 # + return - Returns the tokenized state with correct YAML token
 function scanMappingValueKey(LexerState state, YAMLToken outputToken, function (LexerState state) returns boolean|LexicalError process) returns LexerState|LexicalError {
+    state.indentationBreak = false;
+
     LexicalError? err = assertIndent(state, 1);
     boolean enforceMapping = state.enforceMapping;
     state.enforceMapping = false;
 
-    int startIndent = state.index;
+    state.updateStartIndex();
     LexerState token = check iterate(state, process, outputToken);
 
     if state.isFlowCollection() {
@@ -372,20 +415,20 @@ function scanMappingValueKey(LexerState state, YAMLToken outputToken, function (
 
     // Ignore whitespace until a character is found
     int numWhitespace = 0;
-    while state.peek() == " " {
+    while isWhitespace(state) {
         numWhitespace += 1;
         state.forward();
     }
 
     if err is LexicalError { // Not sufficient indent to process as a value token
         if state.peek() == ":" && !state.isFlowCollection() { // The token is a mapping key
-            token.indentation = check checkIndent(state, startIndent);
+            token.indentation = check checkIndent(state, state.indentStartIndex);
             return token;
         }
         return generateIndentationError(state, "Insufficient indentation for a scalar");
     }
     if state.peek() == ":" && !state.isFlowCollection() {
-        token.indentation = check checkIndent(state, startIndent);
+        token.indentation = check checkIndent(state, state.indentStartIndex);
         return token;
     }
     state.forward(-numWhitespace);
@@ -398,13 +441,14 @@ function scanMappingValueKey(LexerState state, YAMLToken outputToken, function (
 # + outputToken - Single or double quoted keys
 # + return - Returns the tokenized state with correct YAML token
 function scanMappingValueKeyWithDelimiter(LexerState state, YAMLToken outputToken) returns LexerState|LexicalError {
+    state.indentationBreak = false;
     LexerState token = state.tokenize(outputToken);
     boolean enforceMapping = state.enforceMapping;
     state.enforceMapping = false;
 
     // Ignore whitespace until a character is found
     int numWhitespace = 0;
-    while state.peek() == " " {
+    while isWhitespace(state) {
         numWhitespace += 1;
         state.forward();
     }
@@ -413,17 +457,15 @@ function scanMappingValueKeyWithDelimiter(LexerState state, YAMLToken outputToke
         return token;
     }
 
-    if state.index < state.delimiterStartIndex { // Not sufficient indent to process as a value token
+    if state.index < state.indentStartIndex { // Not sufficient indent to process as a value token
         if state.peek() == ":" && !state.isFlowCollection() { // The token is a mapping key
-            token.indentation = check checkIndent(state, state.delimiterStartIndex);
-            state.delimiterStartIndex = -1;
+            token.indentation = check checkIndent(state, state.indentStartIndex);
             return token;
         }
         return generateIndentationError(state, "Insufficient indentation for a scalar");
     }
     if state.peek() == ":" && !state.isFlowCollection() {
-        token.indentation = check checkIndent(state, state.delimiterStartIndex);
-        state.delimiterStartIndex = -1;
+        token.indentation = check checkIndent(state, state.indentStartIndex);
         return token;
     }
     state.forward(-numWhitespace);

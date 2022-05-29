@@ -13,8 +13,6 @@ public class LexerState {
     public Context context = LEXER_START;
 
     # Minimum indentation imposed by the parent nodes
-    // int[] seqIndents = [];
-    // int[] mapIndents = [];
     Indent[] indents = [];
 
     # Minimum indentation required to the current line
@@ -26,9 +24,6 @@ public class LexerState {
     # Represent the number of opened flow collections  
     int numOpenedFlowCollections = 0;
 
-    # Start index of the scalars with delimiter.
-    int delimiterStartIndex = -1;
-
     # Store the lexeme if it will be scanned again by the next token
     string lexemeBuffer = "";
 
@@ -39,10 +34,25 @@ public class LexerState {
     # The lexer is currently processing trailing comments when the flag is set.
     public boolean trailingComment = false;
 
+    # Start index for the mapping value
+    int indentStartIndex = -1;
+
+    YAMLToken[] tokensForMappingValue = [];
+
+    public int lastEscapedChar = -1;
+
+    public boolean allowTokensAsPlanar = false;
+
     # When flag is set, updates the current indent to the indent of the first line
     boolean captureIndent = false;
 
     boolean enforceMapping = false;
+
+    int tabInWhitespace = -1;
+
+    boolean indentationBreak = false;
+
+    public boolean firstLine = true;
 
     # Output TOML token
     YAMLToken token = DUMMY;
@@ -55,15 +65,33 @@ public class LexerState {
     # + k - Number of characters to peek. Default = 0
     # + return - Character at the peek if not null  
     function peek(int k = 0) returns string? {
-        return self.index + k < self.line.length() ? self.line[self.index + k] : ();
+        if self.index + k >= self.line.length() || self.index + k < 0 {
+            return ();
+        }
+        return self.line[self.index + k];
     }
 
     # Increment the index of the column by k indexes
     #
     # + k - Number of indexes to forward. Default = 1
     function forward(int k = 1) {
-        if (self.index + k <= self.line.length()) {
+        if self.index + k <= self.line.length() {
             self.index += k;
+        }
+    }
+
+    function updateStartIndex(YAMLToken? token = ()) {
+        if token != () {
+            self.tokensForMappingValue.push(token);
+        }
+        if self.index < self.indentStartIndex || self.indentStartIndex < 0 {
+            self.indentStartIndex = self.index;
+        }
+    }
+
+    function updateFirstTabIndex() {
+        if self.index < self.tabInWhitespace || self.tabInWhitespace < 0 {
+            self.tabInWhitespace = self.index;
         }
     }
 
@@ -94,12 +122,22 @@ public class LexerState {
         };
     }
 
+    public function setLine(string line, int lineNumber) {
+        self.index = 0;
+        self.line = line;
+        self.lineNumber = lineNumber;
+        self.lastEscapedChar = -1;
+        self.indentStartIndex = -1;
+        self.tokensForMappingValue = [];
+        self.tabInWhitespace = -1;
+    }
+
     # Reset the current lexer state
     public function resetState() {
         self.addIndent = 1;
         self.captureIndent = false;
-        self.delimiterStartIndex = -1;
         self.enforceMapping = false;
+        self.indentStartIndex = -1;
         self.indent = -1;
         self.indents = [];
         self.lexeme = "";

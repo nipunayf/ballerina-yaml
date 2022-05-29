@@ -1,5 +1,5 @@
 # General representation of the YAML event.
-public type Event AliasEvent|ScalarEvent|StartEvent|EndEvent;
+public type Event AliasEvent|ScalarEvent|StartEvent|EndEvent|DocumentMarkerEvent;
 
 # Represents an event that aliases another event.
 #
@@ -27,12 +27,14 @@ public type ScalarEvent record {|
 
 # Represents the attributes of a YAML collection.
 #
-# + startType - YAML collection
-# + flowStyle - If set, the event represents the collection explicitly.
+# + startType - YAML collection  
+# + flowStyle - If set, the event represents the collection explicitly.  
+# + implicit - Flag is set, if there is only one mapping
 public type StartEvent record {|
     *NodeEvent;
     Collection startType;
     boolean flowStyle = false;
+    boolean implicit = false;
 |};
 
 # Represents the attributes to terminate the collection.
@@ -42,9 +44,17 @@ public type EndEvent record {|
     Collection endType;
 |};
 
+# Represents the attributes of a YAML document marker.
+#
+# + explicit - If the marker is start of an explicit document
+# + directive - If there is a directive prior to the marker
+public type DocumentMarkerEvent record {|
+    boolean explicit;
+    boolean directive;
+|};
+
 public enum Collection {
     STREAM,
-    DOCUMENT,
     SEQUENCE,
     MAPPING
 }

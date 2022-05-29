@@ -1,7 +1,8 @@
 import ballerina/test;
 
 @test:Config {
-    dataProvider: nativeDataStructureDataGen
+    dataProvider: nativeDataStructureDataGen,
+    groups: ["composer"]
 }
 function testGenerateNativeDataStructure(string|string[] line, json structure) returns error? {
     ComposerState state = check new ((line is string) ? [line] : line, {});
@@ -29,12 +30,19 @@ function nativeDataStructureDataGen() returns map<[string|string[], json]> {
         "explicit key with mapping value in block mapping": [["? key", ":"], {"key": ()}],
         "explicit key empty key": [["? ", ": value"], {"": "value"}],
         "empty value flow mapping": ["{key,}", {"key": ()}],
-        "empty values in block mapping": [["first:", "second:"], {"first": (), "second": ()}]
+        "empty values in block mapping": [["first:", "second:"], {"first": (), "second": ()}],
+        "anchoring the key after empty node": [["a: ", "&anchor b: *anchor"], {"a": (), "b": "b"}],
+        "anchoring the key of nested value": [["a: ", "  &anchor b: *anchor"], {"a": {"b": "b"}}],
+        "anchoring the empty node of a map": [["a: &anchor", "b: *anchor"], {"a": (), "b": ()}],
+        "single flow implicit map": ["[key: value]", [{"key": "value"}]],
+        "nested flow implicit map": ["[outer: {nested: value}]", [{"outer": {"nested": "value"}}]],
+        "multiple flow implicit maps": [["[first: value1,", "second: value2]"], [{"first": "value1"}, {"second": "value2"}]]
     };
 }
 
 @test:Config {
-    dataProvider: invalidEventStreamDataGen
+    dataProvider: invalidEventStreamDataGen,
+    groups: ["composer"]
 }
 function testComposeInvalidEventStream(string[] lines) returns error? {
     ComposerState state = check new (lines, {});
@@ -49,12 +57,14 @@ function invalidEventStreamDataGen() returns map<[string[]]> {
         "flow style sequence without end": [["[", " first, ", "second "]],
         "aliasing anchor does note exist": [["*alias"]],
         "invalid explicit tags must return an error": [["!!int alias"]],
-        "cyclic reference": [["- &anchor [*anchor]"]]
+        "cyclic reference": [["- &anchor [*anchor]"]],
+        "two block keys in same line": [["first: value1 second: value2"]]
     };
 }
 
 @test:Config {
-    dataProvider: streamDataGen
+    dataProvider: streamDataGen,
+    groups: ["composer"]
 }
 function testComposeMultipleDocuments(string[] lines, json[] expectedDocs) returns error? {
     ComposerState state = check new (lines, {});
@@ -67,6 +77,14 @@ function testComposeMultipleDocuments(string[] lines, json[] expectedDocs) retur
 function streamDataGen() returns map<[string[], json[]]> {
     return {
         "multiple bare documents": [["first doc", "...", "second doc"], ["first doc", "second doc"]],
+        "explicit after bare": [["first doc", "---", "second doc"], ["first doc", "second doc"]],
+        "explicit after directive": [["%YAML 1.1", "---", "first doc", "---", "second doc"], ["first doc", "second doc"]],
+        "any explicit after directive": [["%YAML 1.1", "---", "first doc", "...", "---", "second doc"], ["first doc", "second doc"]],
+        "explicit after empty directive": [["%YAML 1.1", "---", "# empty doc", "---", "second doc"], [(), "second doc"]],
+        "directive after empty bare": [["# empty doc", "...", "%YAML 1.1", "---", "second doc", "..."], [(), "second doc"]],
+        "two empty directive": [["---", "# empty doc", "---"], [(), ()]],
+        "bare after directive": [["%YAML 1.1", "---", "first doc", "...", "second doc"], ["first doc", "second doc"]],
+        "multiple end document markers": [["first doc", "...", "..."], ["first doc"]],
         "hoping out from block collection": [["-", " - value", "...", "second doc"], [[["value"]], "second doc"]]
     };
 }

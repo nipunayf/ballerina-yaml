@@ -7,59 +7,71 @@ import yaml.lexer;
 function doubleQuoteScalar(ParserState state) returns ParsingError|string {
     state.updateLexerContext(lexer:LEXER_DOUBLE_QUOTE);
     string lexemeBuffer = "";
-    boolean isFirstLine = true;
+    state.lexerState.firstLine = true;
     boolean emptyLine = false;
     boolean escaped = false;
 
     check checkToken(state);
 
     // Iterate the content until the delimiter is found
-    while (state.currentToken.token != lexer:DOUBLE_QUOTE_DELIMITER) {
+    while state.currentToken.token != lexer:DOUBLE_QUOTE_DELIMITER {
         match state.currentToken.token {
             lexer:DOUBLE_QUOTE_CHAR => { // Regular double quoted string char
                 string lexeme = state.currentToken.value;
 
                 // Check for double escaped character
                 if lexeme.length() > 0 && lexeme[lexeme.length() - 1] == "\\" {
-                    lexeme = lexeme.substring(0, lexeme.length() - 2);
                     escaped = true;
-                }
-
-                    else if !isFirstLine {
+                    lexemeBuffer += lexeme.substring(0, lexeme.length() - 1);
+                } else if !state.lexerState.firstLine {
                     if escaped {
                         escaped = false;
                     } else { // Trim the white space if not escaped
-                        lexemeBuffer = trimTailWhitespace(lexemeBuffer);
+                        if !emptyLine { // Add a white space if there are not preceding empty lines
+                            lexemeBuffer += " ";
+                        }
                     }
-
-                    if emptyLine {
-                        emptyLine = false;
-                    } else { // Add a white space if there are not preceding empty lines
-                        lexemeBuffer += " ";
-                    }
+                    lexemeBuffer += lexeme;
+                } else {
+                    lexemeBuffer += lexeme;
                 }
 
-                lexemeBuffer += lexeme;
+                if emptyLine {
+                    emptyLine = false;
+                }
             }
             lexer:EOL => { // Processing new lines
                 if !escaped { // If not escaped, trim the trailing white spaces
-                    lexemeBuffer = trimTailWhitespace(lexemeBuffer);
+                    lexemeBuffer = trimTailWhitespace(lexemeBuffer, state.lexerState.lastEscapedChar);
                 }
-                isFirstLine = false;
+
+                state.lexerState.firstLine = false;
                 check state.initLexer("Expected to end the multi-line double string");
+
+                // Add a whitespace if the delimiter is on a new line
+                check checkToken(state, peek = true);
+                if state.tokenBuffer.token == lexer:DOUBLE_QUOTE_DELIMITER && !emptyLine {
+                    lexemeBuffer += " ";
+                }
             }
             lexer:EMPTY_LINE => {
-                if isFirstLine { // Whitespace is preserved on the first line
-                    lexemeBuffer += state.currentToken.value;
-                    isFirstLine = false;
-                } else if escaped { // Whitespace is preserved when escaped
+                if escaped && !state.lexerState.firstLine { // Whitespace is preserved when escaped
                     lexemeBuffer += state.currentToken.value + "\n";
-                } else { // Whitespace is ignored when line folding
+                } else if !state.lexerState.firstLine { // Whitespace is ignored when line folding
                     lexemeBuffer = trimTailWhitespace(lexemeBuffer);
                     lexemeBuffer += "\n";
                 }
                 emptyLine = true;
                 check state.initLexer("Expected to end the multi-line double-quoted scalar");
+
+                boolean firstLineBuffer = state.lexerState.firstLine;
+                state.lexerState.firstLine = false;
+
+                check checkToken(state, peek = true);
+                if state.tokenBuffer.token == lexer:DOUBLE_QUOTE_DELIMITER && firstLineBuffer {
+                    lexemeBuffer += " ";
+                }
+                state.lexerState.firstLine = false;
             }
             _ => {
                 return generateInvalidTokenError(state, "double-quoted scalar");
@@ -68,7 +80,8 @@ function doubleQuoteScalar(ParserState state) returns ParsingError|string {
         check checkToken(state);
     }
 
-    check verifyKey(state, isFirstLine);
+    check verifyKey(state, state.lexerState.firstLine);
+    state.lexerState.firstLine = true;
     return lexemeBuffer;
 }
 
@@ -79,7 +92,7 @@ function doubleQuoteScalar(ParserState state) returns ParsingError|string {
 function singleQuoteScalar(ParserState state) returns ParsingError|string {
     state.updateLexerContext(lexer:LEXER_SINGLE_QUOTE);
     string lexemeBuffer = "";
-    boolean isFirstLine = true;
+    state.lexerState.firstLine = true;
     boolean emptyLine = false;
 
     check checkToken(state);
@@ -90,33 +103,43 @@ function singleQuoteScalar(ParserState state) returns ParsingError|string {
             lexer:SINGLE_QUOTE_CHAR => {
                 string lexeme = state.currentToken.value;
 
-                if isFirstLine {
-                    lexemeBuffer += lexeme;
-                } else {
+                if !state.lexerState.firstLine {
                     if emptyLine {
                         emptyLine = false;
                     } else { // Add a white space if there are not preceding empty lines
                         lexemeBuffer += " ";
                     }
-                    lexemeBuffer += trimHeadWhitespace(lexeme);
                 }
+                lexemeBuffer += lexeme;
             }
             lexer:EOL => {
                 // Trim trailing white spaces
                 lexemeBuffer = trimTailWhitespace(lexemeBuffer);
-                isFirstLine = false;
-                check state.initLexer("Expected to end the multi-line double string");
+                state.lexerState.firstLine = false;
+                check state.initLexer("Expected to end the multi-line single-quoted string");
+
+                // Add a whitespace if the delimiter is on a new line
+                check checkToken(state, peek = true);
+                if state.tokenBuffer.token == lexer:SINGLE_QUOTE_DELIMITER && !emptyLine {
+                    lexemeBuffer += " ";
+                }
             }
             lexer:EMPTY_LINE => {
-                if isFirstLine { // Whitespace is preserved on the first line
-                    lexemeBuffer += state.currentToken.value;
-                    isFirstLine = false;
-                } else { // Whitespace is ignored when line folding
+                if !state.lexerState.firstLine { // Whitespace is ignored when line folding
                     lexemeBuffer = trimTailWhitespace(lexemeBuffer);
                     lexemeBuffer += "\n";
                 }
                 emptyLine = true;
                 check state.initLexer("Expected to end the multi-line single-quoted scalar");
+
+                boolean firstLineBuffer = state.lexerState.firstLine;
+                state.lexerState.firstLine = false;
+
+                check checkToken(state, peek = true);
+                if state.tokenBuffer.token == lexer:SINGLE_QUOTE_DELIMITER && firstLineBuffer {
+                    lexemeBuffer += " ";
+                }
+                state.lexerState.firstLine = false;
             }
             _ => {
                 return generateInvalidTokenError(state, "single-quoted scalar");
@@ -125,7 +148,8 @@ function singleQuoteScalar(ParserState state) returns ParsingError|string {
         check checkToken(state);
     }
 
-    check verifyKey(state, isFirstLine);
+    check verifyKey(state, state.lexerState.firstLine);
+    state.lexerState.firstLine = true;
     return lexemeBuffer;
 }
 
@@ -136,8 +160,9 @@ function singleQuoteScalar(ParserState state) returns ParsingError|string {
 function planarScalar(ParserState state) returns ParsingError|string {
     // Process the first planar char
     string lexemeBuffer = state.currentToken.value;
-    boolean emptyLine = false;
     boolean isFirstLine = true;
+    string newLineBuffer = "";
+    state.lexerState.allowTokensAsPlanar = true;
 
     check checkToken(state, peek = true);
 
@@ -149,8 +174,9 @@ function planarScalar(ParserState state) returns ParsingError|string {
                     break;
                 }
                 check checkToken(state);
-                if emptyLine {
-                    emptyLine = false;
+                if newLineBuffer.length() > 0 {
+                    lexemeBuffer += newLineBuffer;
+                    newLineBuffer = "";
                 } else { // Add a whitespace if there are no preceding empty lines
                     lexemeBuffer += " ";
                 }
@@ -158,17 +184,21 @@ function planarScalar(ParserState state) returns ParsingError|string {
             }
             lexer:EOL => {
                 check checkToken(state);
-                isFirstLine = false;
 
                 // Terminate at the end of the line
                 if state.lineIndex == state.numLines - 1 {
                     break;
                 }
-                check state.initLexer("");
+                check state.initLexer();
+
+                isFirstLine = false;
+            }
+            lexer:COMMENT => {
+                check checkToken(state);
+                break;
             }
             lexer:EMPTY_LINE => {
-                lexemeBuffer += "\n";
-                emptyLine = true;
+                newLineBuffer += "\n";
                 check checkToken(state);
                 // Terminate at the end of the line
                 if state.lineIndex == state.numLines - 1 {
@@ -178,7 +208,7 @@ function planarScalar(ParserState state) returns ParsingError|string {
             }
             lexer:SEPARATION_IN_LINE => {
                 check checkToken(state);
-                // Continue to scan planar char if the white space at the lexer:EOL
+                // Continue to scan planar char if the white space at the end-of-line
                 check checkToken(state, peek = true);
                 if state.tokenBuffer.token == lexer:MAPPING_VALUE {
                     break;
@@ -192,6 +222,7 @@ function planarScalar(ParserState state) returns ParsingError|string {
     }
 
     check verifyKey(state, isFirstLine);
+    state.lexerState.allowTokensAsPlanar = false;
     return trimTailWhitespace(lexemeBuffer);
 }
 
@@ -210,7 +241,10 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
         lexer:CHOMPING_INDICATOR => { // Strip and keep chomping indicators
             chompingIndicator = state.currentToken.value;
             check checkToken(state, lexer:EOL);
-            check state.initLexer();
+
+            if state.lineIndex < state.numLines - 1 {
+                check state.initLexer();
+            }
         }
         lexer:EOL => { // Clip chomping indicator
             check state.initLexer();
@@ -225,7 +259,9 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
     string lexemeBuffer = "";
     string newLineBuffer = "";
     boolean isFirstLine = true;
+    boolean onlyEmptyLine = false;
     boolean prevTokenIndented = false;
+    boolean tokenProcessed = false;
 
     check checkToken(state, peek = true);
 
@@ -234,7 +270,7 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
             lexer:PRINTABLE_CHAR => {
                 if !isFirstLine {
                     string suffixChar = "\n";
-                    if isFolded && prevTokenIndented && state.tokenBuffer.value[0] != " " {
+                    if isFolded && prevTokenIndented && (state.tokenBuffer.value[0] != " " && state.tokenBuffer.value[0] != "\t") {
                         suffixChar = newLineBuffer.length() == 0 ? " " : "";
                     }
                     lexemeBuffer += newLineBuffer + suffixChar;
@@ -242,7 +278,7 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
                 }
 
                 lexemeBuffer += state.tokenBuffer.value;
-                prevTokenIndented = state.tokenBuffer.value[0] != " ";
+                prevTokenIndented = (state.tokenBuffer.value[0] != " " && state.tokenBuffer.value[0] != "\t");
                 isFirstLine = false;
             }
             lexer:EOL => {
@@ -257,15 +293,20 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
                     newLineBuffer += "\n";
                 }
                 if state.lineIndex == state.numLines - 1 {
+                    tokenProcessed = true;
                     break;
                 }
                 check state.initLexer();
+                onlyEmptyLine = isFirstLine;
                 isFirstLine = false;
             }
             lexer:TRAILING_COMMENT => {
                 state.lexerState.trailingComment = true;
+
                 // Terminate at the end of the line
                 if state.lineIndex == state.numLines - 1 {
+                    check checkToken(state);
+                    tokenProcessed = true;
                     break;
                 }
                 check state.initLexer();
@@ -276,6 +317,7 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
                 while state.tokenBuffer.token == lexer:EOL || state.tokenBuffer.token == lexer:EMPTY_LINE {
                     // Terminate at the end of the line
                     if state.lineIndex == state.numLines - 1 {
+                        tokenProcessed = true;
                         break;
                     }
                     check state.initLexer();
@@ -284,6 +326,7 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
                 }
 
                 state.lexerState.trailingComment = false;
+                tokenProcessed = true;
                 break;
             }
             _ => { // Break the character when the token does not belong to planar scalar
@@ -292,20 +335,21 @@ function blockScalar(ParserState state, boolean isFolded) returns ParsingError|s
         }
         check checkToken(state);
         check checkToken(state, peek = true);
+        tokenProcessed = true;
     }
 
     // Adjust the tail based on the chomping values
-    match chompingIndicator {
-        "-" => {
-            //TODO: trim trailing newlines
-        }
-        "+" => {
-            lexemeBuffer += "\n";
-            lexemeBuffer += newLineBuffer;
-        }
-        "=" => {
-            //TODO: trim trailing newlines
-            lexemeBuffer += "\n";
+    if tokenProcessed {
+        match chompingIndicator {
+            "+" => {
+                lexemeBuffer += "\n";
+                lexemeBuffer += newLineBuffer;
+            }
+            "=" => {
+                if !onlyEmptyLine {
+                    lexemeBuffer += "\n";
+                }
+            }
         }
     }
 

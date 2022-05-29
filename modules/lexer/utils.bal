@@ -16,7 +16,7 @@ function iterate(LexerState state, function (LexerState state) returns boolean|L
 
     // Iterate the given line to check the DFA
     while state.index < state.line.length() {
-        if (check process(state)) {
+        if check process(state) {
             state.index = include ? state.index : state.index - 1;
             return state.tokenize(successToken);
         }
@@ -44,7 +44,7 @@ function matchRegexPattern(LexerState state, string|string[] inclusionPatterns, 
     string inclusionPattern = "[" + concatenateStringArray(inclusionPatterns) + "]";
     string exclusionPattern = "";
 
-    if (exclusionPatterns != ()) {
+    if exclusionPatterns != () {
         exclusionPattern = "(?![" + concatenateStringArray(exclusionPatterns) + "])";
     }
     return regex:matches(<string>state.peek(offset), exclusionPattern + inclusionPattern + "{1}");
@@ -55,7 +55,7 @@ function matchRegexPattern(LexerState state, string|string[] inclusionPatterns, 
 # + strings - Strings to be concatenated
 # + return - Concatenated string
 function concatenateStringArray(string[]|string strings) returns string {
-    if (strings is string) {
+    if strings is string {
         return strings;
     }
     string output = "";
@@ -74,7 +74,7 @@ function concatenateStringArray(string[]|string strings) returns string {
 function tokensInSequence(LexerState state, string chars, YAMLToken successToken) returns LexerState|LexicalError {
     foreach string char in chars {
         // The expected character is not found
-        if (state.peek() == () || !checkCharacter(state, char)) {
+        if state.peek() == () || !checkCharacter(state, char) {
             return generateScanningError(state, string `Expected '${char}' for ${successToken}`);
         }
         state.forward();
@@ -91,9 +91,9 @@ function tokensInSequence(LexerState state, string chars, YAMLToken successToken
 # + index - Index of the character. If null, takes the lexer's 
 # + return - True if the assertion is true. Else, an lexical error
 function checkCharacter(LexerState state, string|string[] expectedCharacters, int? index = ()) returns boolean {
-    if (expectedCharacters is string) {
+    if expectedCharacters is string {
         return expectedCharacters == state.line[index == () ? state.index : index];
-    } else if (expectedCharacters.indexOf(state.line[index == () ? state.index : index]) == ()) {
+    } else if expectedCharacters.indexOf(state.line[index == () ? state.index : index]) == () {
         return false;
     }
     return true;
@@ -105,3 +105,27 @@ function checkCharacter(LexerState state, string|string[] expectedCharacters, in
 # + return - Return true if a planar safe character is found.
 function isPlainSafe(LexerState state) returns boolean
     => matchRegexPattern(state, [PRINTABLE_PATTERN], [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, INDICATOR_PATTERN]);
+
+function isWhitespace(LexerState state, int offset = 0) returns boolean
+    => state.peek(offset) == " " || state.peek(offset) == "\t";
+
+function isTabInIndent(LexerState state, int upperLimit) returns boolean 
+    => state.indent > -1 && state.tabInWhitespace > -1 && state.tabInWhitespace <= upperLimit;
+
+function isMarker(LexerState state, boolean directive) returns boolean {
+    string directiveChar = directive ? "-" : ".";
+    if state.peek(0) == directiveChar && state.peek(1) == directiveChar && state.peek(2) == directiveChar 
+        && (isWhitespace(state, 3) || state.peek(3) == ()) {
+        state.forward(2);
+        return true;
+    } 
+    return false;
+}
+
+function discernTagPropertyFromPlanar(LexerState state, int offset = 0) returns boolean
+    => (!state.allowTokensAsPlanar || state.index < state.indent + 1 + offset);
+
+function discernPlanarFromIndicator(LexerState state) returns boolean
+    => matchRegexPattern(state, [PRINTABLE_PATTERN], state.isFlowCollection()
+            ? [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN, FLOW_INDICATOR_PATTERN]
+            : [LINE_BREAK_PATTERN, BOM_PATTERN, WHITESPACE_PATTERN], 1);

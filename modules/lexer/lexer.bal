@@ -31,7 +31,8 @@ final readonly & map<string> escapedCharMap = {
     "_": "\u{a0}",
     "L": "\u{2028}",
     "P": "\u{2029}",
-    " ": "\u{20}"
+    " ": "\u{20}",
+    "\t": "\t"
 };
 
 # Generates a Token for the next immediate lexeme.
@@ -65,11 +66,14 @@ public function scan(LexerState state) returns LexerState|LexicalError {
     }
 
     // Generate EOL token at the last index
-    if (state.index >= state.line.length()) {
+    if state.index >= state.line.length() {
+        if state.indentationBreak {
+            return generateIndentationError(state, "Invalid indentation");
+        }
         return state.index == 0 ? state.tokenize(EMPTY_LINE) : state.tokenize(EOL);
     }
 
-    if (matchRegexPattern(state, LINE_BREAK_PATTERN)) {
+    if matchRegexPattern(state, LINE_BREAK_PATTERN) {
         return state.tokenize(LINE_BREAK);
     }
 
@@ -103,6 +107,9 @@ public function scan(LexerState state) returns LexerState|LexicalError {
         }
         LEXER_LITERAL => {
             return contextBlockScalar(state);
+        }
+        LEXER_RESERVED_DIRECTIVE => {
+            return contextReservedDirective(state);
         }
         _ => {
             return generateScanningError(state, "Invalid context for the lexer");

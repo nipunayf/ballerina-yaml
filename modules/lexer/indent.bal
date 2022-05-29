@@ -19,6 +19,10 @@ type Indent record {|
 function checkIndent(LexerState state, int? mapIndex = ()) returns Indentation|LexicalError {
     int startIndex = mapIndex == () ? state.index - 1 : mapIndex;
 
+    if isTabInIndent(state, startIndex) {
+        return generateIndentationError(state, "Cannot have tab as an indentation");
+    }
+
     common:Collection collection = mapIndex == () ? common:SEQUENCE : common:MAPPING;
 
     if state.indent == startIndex {
@@ -29,10 +33,7 @@ function checkIndent(LexerState state, int? mapIndex = ()) returns Indentation|L
         // The current token is a mapping key and a sequence entry exists for the indent
         if mapIndex is int && existingIndentType.indexOf(<common:Collection>common:SEQUENCE) is int {
             if existingIndentType.indexOf(<common:Collection>common:MAPPING) is int {
-                return {
-                    change: -1,
-                    collection: [state.indents.pop().collection]
-                };
+                return generateIndentationRecord(state, -1, [state.indents.pop().collection]);
             } else {
                 return generateIndentationError(state, "Block mapping cannot have the same indent as a block sequence");
             }
@@ -41,37 +42,24 @@ function checkIndent(LexerState state, int? mapIndex = ()) returns Indentation|L
         // The current token is a sequence entry and a mapping key exists for the indent
         if mapIndex is () && existingIndentType.indexOf(<common:Collection>common:MAPPING) is int {
             if existingIndentType.indexOf(<common:Collection>common:SEQUENCE) is int {
-                return {
-                    change: 0,
-                    collection: []
-                };
+                return generateIndentationRecord(state, 0, []);
             } else {
                 state.indents.push({index: startIndex, collection: common:SEQUENCE});
-                return {
-                    change: 1,
-                    collection: [common:SEQUENCE]
-                };
+                return generateIndentationRecord(state, 1, [common:SEQUENCE]);
             }
         }
-
-        return {
-            change: 0,
-            collection: []
-        };
+        return generateIndentationRecord(state, 0, []);
     }
 
     if state.indent < startIndex {
         state.indents.push({index: startIndex, collection});
         state.indent = startIndex;
-        return {
-            change: 1,
-            collection: [collection]
-        };
+        return generateIndentationRecord(state, 1, [collection]);
     }
 
     Indent? removedIndent = ();
     common:Collection[] returnCollection = [];
-    while state.indent > startIndex {
+    while state.indent > startIndex && state.indents.length() > 0 {
         removedIndent = state.indents.pop();
         state.indent = (<Indent>removedIndent).index;
         returnCollection.push((<Indent>removedIndent).collection);
@@ -91,10 +79,7 @@ function checkIndent(LexerState state, int? mapIndex = ()) returns Indentation|L
         state.indents.push({index: state.indent, collection});
         if returnCollection.length() > 1 {
             _ = returnCollection.pop();
-            return {
-                change: -1,
-                collection: returnCollection
-            };
+            return generateIndentationRecord(state, -1, returnCollection);
         }
     }
 
@@ -103,11 +88,19 @@ function checkIndent(LexerState state, int? mapIndex = ()) returns Indentation|L
 
 # Check if the current index has sufficient indent.
 #
-# + state - Current lexer state
-# + offset - Additional whitespace after the parent indent
+# + state - Current lexer state  
+# + offset - Additional whitespace after the parent indent  
+# + captureIndentationBreak - Flag is set if the token is allowed as prefix to a mapping key name
 # + return - An error if the indent is not sufficient
-function assertIndent(LexerState state, int offset = 0) returns LexicalError? {
+function assertIndent(LexerState state, int offset = 0, boolean captureIndentationBreak = false) returns LexicalError? {
     if state.index < state.indent + offset {
+        if captureIndentationBreak {
+            state.indentationBreak = true;
+            return;
+        }
         return generateIndentationError(state, "Invalid indentation");
     }
 }
+
+function generateIndentationRecord(LexerState state, IndentChange change, common:Collection[] collection)
+    returns Indentation => {change, collection, tokens: state.tokensForMappingValue.clone()};

@@ -11,15 +11,8 @@ import yaml.lexer;
 function checkEvent(ComposerState state, parser:ParserOption option = parser:DEFAULT,
     parser:DocumentType docType = parser:BARE_DOCUMENT) returns common:Event|lexer:LexicalError|parser:ParsingError {
     
-    if state.docTerminated {
-        return {endType: common:DOCUMENT};
+    if state.terminatedDocEvent is common:DocumentMarkerEvent {
+        return <common:DocumentMarkerEvent>state.terminatedDocEvent;
     }
     return parser:parse(state.parserState, option, docType);
 }
-
-# Check if the end of the document is reached
-#
-# + event - Current event
-# + return - True if the end of the document is reached
-function isEndOfDocument(common:Event event) returns boolean =>
-    event is common:EndEvent && (event.endType == common:STREAM || event.endType == common:DOCUMENT);
