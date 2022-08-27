@@ -1,6 +1,6 @@
 # Ballerina YAML Parser
 
-![Build](https://github.com/nipunayf/module-ballerina-yaml/actions/workflows/ci.yml/badge.svg)
+**The development of this parser is continued in https://github.com/ballerina-platform/module-ballerina-yaml**
 
 `Ballerina YAML Parser` converts a given YAML file to a Ballerina data structure, and vice-versa. 
 
